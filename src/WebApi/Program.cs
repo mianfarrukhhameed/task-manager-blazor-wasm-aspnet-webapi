@@ -1,43 +1,62 @@
-using Microsoft.AspNetCore.Hosting;
+using Fistix.TaskManager.Core.Config;
+using Fistix.TaskManager.ServiceLayer;
+using Fistix.TaskManager.ViewModel.Validators.Todos;
+using Fistix.TaskManager.WebApi.Extensions;
+using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.AzureAppConfiguration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
-namespace Fistix.TaskManager.WebApi
+var builder = WebApplication.CreateBuilder(args);
+
+// Azure App Configuration (if available)
+var appConfigConnectionString = Environment.GetEnvironmentVariable("AppConfigConnectionString");
+if (!string.IsNullOrWhiteSpace(appConfigConnectionString))
 {
-  public class Program
-  {
-    public static void Main(string[] args)
+    builder.Configuration.AddAzureAppConfiguration(options =>
     {
-      CreateHostBuilder(args).Build().Run();
-    }
-
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .ConfigureWebHostDefaults(webBuilder =>
-            {
-              var appConfigConnectionString = Environment.GetEnvironmentVariable("AppConfigConnectionString");
-              if (!string.IsNullOrWhiteSpace(appConfigConnectionString))
-              {
-                webBuilder.ConfigureAppConfiguration((hostingContext, config) =>
-                {
-                  var settings = config.Build();
-                  config.AddAzureAppConfiguration(options =>
-                  {
-                    options
-                            .Connect(appConfigConnectionString)
-                            .Select(KeyFilter.Any, null)
-                            .Select(KeyFilter.Any,
-                                Environment.GetEnvironmentVariable("AppConfigEnvironmentName"));
-                  });
-                });
-              }
-              webBuilder.UseStartup<Startup>();
-            });
-  }
+        options
+            .Connect(appConfigConnectionString)
+            .Select(KeyFilter.Any, null)
+            .Select(KeyFilter.Any, Environment.GetEnvironmentVariable("AppConfigEnvironmentName"));
+    });
 }
+
+// Load configuration and populate MasterConfig
+var masterConfig = new MasterConfig();
+masterConfig.PopulateConfiguration(builder.Configuration);
+
+// Add services to the container
+builder.Services.AddControllers(options =>
+{
+    //options.Filters.Add(typeof(Tracing.GlobalControllerAppInsightsAttribute));
+})
+.AddFluentValidation(x => x.RegisterValidatorsFromAssemblyContaining<CreateTodoTaskCommandValidator>());
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddServiceLayer(masterConfig);
+builder.Services.AddCommonServices(masterConfig);
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
+
+app.UseHttpsRedirection();
+app.UseRouting();
+app.UseCommonService(masterConfig);
+
+app.MapControllers();
+
+await app.RunAsync();
