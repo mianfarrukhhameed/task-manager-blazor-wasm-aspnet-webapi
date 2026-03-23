@@ -27,8 +27,8 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-[Bb]in/
-[Oo]bj/
+**/[Bb]in/
+**/[Oo]bj/
 [Ll]og/
 [Ll]ogs/
 
@@ -54,7 +54,78 @@ nunit-*.xml
 [Rr]eleasePS/
 dlldata.c
 
-# Benchmark Results
+# Local user-specific settings
+launchSettings.json
+appsettings.Development.json
+
+# Build folder (for publishing)
+[Pp]ublish/
+[Pp]ackages/
+
+# Entity Framework migrations
+Migrations/
+
+# Test Results
+TestResults/
+*.trx
+*.coverage
+
+# Application Insights
+ApplicationInsights.config
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Temporary files
+*.tmp
+*.temp
+Thumbs.db
+
+# npm
+node_modules/
+npm-debug.log
+package-lock.json
+yarn-lock.json
+
+# Webpack
+dist/
+build/
+
+# Blazor WebAssembly
+wwwroot/service-worker.published.js
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE settings
+.editorconfig
+*.editorconfig.user
+
+# OS specific
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Visual Studio for Mac
+.vscode/
+.vs/
+*.userprefs
+*.usertasks
+
+# Ionide (cross platform F# VS Code tools) working directory
+.ionide/
+
+# Code coverage
+coverage/
+coverage.json
+OpenCover/
+
+# BenchmarkDotNet
 BenchmarkDotNet.Artifacts/
 
 # .NET Core
