@@ -15,7 +15,7 @@ namespace Fistix.TaskManager.ServiceLayer
     {
       services.AddMediatR(typeof(CreateTodoTaskCommand).Assembly, typeof(CreateTodoTaskCommandHandler).Assembly);
 
-      services.AddAutoMapper(typeof(TodoTaskProfileMapping).Assembly);
+      services.AddAutoMapper(x=>x.AddProfile<TodoTaskProfileMapping>());
             
       services.AddDataLayer(masterConfig);
     }
