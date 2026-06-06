@@ -37,7 +37,7 @@ namespace Fistix.TaskManager.WebApi.Controllers
       {       
         var result = await _mediator.Send(command);
 
-        return Created($"api/todos/{result.Payload.Id}", result.Payload);
+        return Created($"api/todos/{result.Payload.ExternalId}", result.Payload);
       }
       catch (BadHttpRequestException ex)
       {

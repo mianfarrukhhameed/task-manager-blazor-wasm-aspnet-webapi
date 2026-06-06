@@ -27,19 +27,21 @@ namespace Fistix.TaskManager.DataLayer.Repositories
       return effectedRecords > 0;
     }
 
-    public async Task<bool> Delete(Guid id, CancellationToken cancellationToken)
+    public async Task<bool> Delete(Guid externalId, CancellationToken cancellationToken)
     {
-      var todoTask = await _context.TodoTasks.FindAsync(id);
+      var todoTask = await _context.TodoTasks.FirstOrDefaultAsync(t => t.ExternalId == externalId, cancellationToken);
+      if (todoTask == null)
+        throw new NotFoundException();
       
       _context.TodoTasks.Remove(todoTask);
-      var effectedRecords = await _context.SaveChangesAsync();
+      var effectedRecords = await _context.SaveChangesAsync(cancellationToken);
 
       return effectedRecords > 0;
     }
 
-    public async Task<TodoTask> Get(Guid id, CancellationToken calcellationToken)
+    public async Task<TodoTask> Get(Guid externalId, CancellationToken calcellationToken)
     {
-      var entity = await _context.TodoTasks.FindAsync(id);
+      var entity = await _context.TodoTasks.FirstOrDefaultAsync(t => t.ExternalId == externalId, calcellationToken);
       if (entity == null)
         throw new NotFoundException();
 

@@ -22,7 +22,7 @@ namespace Fistix.TaskManager.WebApi.Services
 
     public string Email => _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Email);
 
-    public bool HasAdminProfile => UserProfile != null && UserProfile.Id != Guid.Empty && UserProfile.IsAdmin;
+    public bool HasAdminProfile => UserProfile != null && UserProfile.ExternalId != Guid.Empty && UserProfile.IsAdmin;
 
     public UserProfile UserProfile
     {

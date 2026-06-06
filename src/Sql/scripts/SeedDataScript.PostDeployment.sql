@@ -9,14 +9,18 @@ Post-Deployment Script Template
                SELECT * FROM [$(TableName)]          
 --------------------------------------------------------------------------------------
 */
-If Not Exists(SELECT * FROM UserProfile WHERE Id = '2ba3faed-ce16-46df-8b95-ab0ef26e8ad6')
+If Not Exists(SELECT * FROM UserProfile WHERE ExternalId = '2ba3faed-ce16-46df-8b95-ab0ef26e8ad6')
 BEGIN
-  INSERT INTO UserProfile(Id, [Name], EmailAddress, IsAdmin)
-    VALUES('2ba3faed-ce16-46df-8b95-ab0ef26e8ad6','dev','dev@test.com', 0)
+SET IDENTITY_INSERT  UserProfile ON
+  INSERT INTO UserProfile(Id, ExternalId, [Name], EmailAddress, IsAdmin)
+    VALUES(1, '2ba3faed-ce16-46df-8b95-ab0ef26e8ad6','dev','dev@test.com', 0)
+  SET IDENTITY_INSERT  UserProfile OFF
 END
 
-If Not Exists(SELECT * FROM UserProfile WHERE Id = '1efb2983-09be-47a5-ac2c-bff124d542ec')
+If Not Exists(SELECT * FROM UserProfile WHERE ExternalId = '1efb2983-09be-47a5-ac2c-bff124d542ec')
 BEGIN
-  INSERT INTO UserProfile(Id, [Name], EmailAddress, IsAdmin)
-    VALUES('1efb2983-09be-47a5-ac2c-bff124d542ec','admin','admin@test.com', 1)
+SET IDENTITY_INSERT  UserProfile ON
+  INSERT INTO UserProfile(Id, ExternalId, [Name], EmailAddress, IsAdmin)
+    VALUES(2, '1efb2983-09be-47a5-ac2c-bff124d542ec','admin','admin@test.com', 1)
+    SET IDENTITY_INSERT  UserProfile OFF
 END

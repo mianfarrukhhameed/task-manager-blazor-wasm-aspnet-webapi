@@ -30,6 +30,7 @@
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\ServiceLayer\ServiceLayer.csproj" />
     <ProjectReference Include="..\ViewModel\ViewModel.csproj" />
+    <ProjectReference Include="..\AiLayer\AiLayer.csproj" />
   </ItemGroup>
 
 </Project>

@@ -44,6 +44,7 @@ builder.Services.AddControllers(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddServiceLayer(masterConfig);
 builder.Services.AddCommonServices(masterConfig);
+builder.Services.AddAiServices();  // Add AI services
 
 var app = builder.Build();
 

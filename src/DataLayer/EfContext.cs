@@ -13,6 +13,7 @@ namespace Fistix.TaskManager.DataLayer
 
     public DbSet<TodoTask> TodoTasks { get; set; }
     public DbSet<UserProfile> UserProfiles { get; set; }
+    public DbSet<TodoAiMetadata> TodoAiMetadatas { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +21,7 @@ namespace Fistix.TaskManager.DataLayer
 
       TodoTaskModelConfig(modelBuilder);
       UserProfileModelConfig(modelBuilder);
+      TodoAiMetadataModelConfig(modelBuilder);
     }
 
     private void TodoTaskModelConfig(ModelBuilder modelBuilder)
@@ -27,7 +29,14 @@ namespace Fistix.TaskManager.DataLayer
       modelBuilder.Entity<TodoTask>(entityModel =>
       {
         entityModel.ToTable("TodoTask");
-        entityModel.HasKey(k => k.Id);        
+        entityModel.HasKey(k => k.Id);
+        entityModel.Property(p => p.Id)
+          .ValueGeneratedOnAdd();
+        entityModel.Property(p => p.ExternalId)
+          .HasDefaultValueSql("NEWSEQUENTIALID()")
+          .IsRequired();
+        entityModel.HasIndex(k => k.ExternalId)
+          .IsUnique();
       });
     }
     private void UserProfileModelConfig(ModelBuilder modelBuilder)
@@ -36,6 +45,21 @@ namespace Fistix.TaskManager.DataLayer
       {
         entityModel.ToTable("UserProfile");
         entityModel.HasKey(k => k.Id);
+      });
+    }
+    private void TodoAiMetadataModelConfig(ModelBuilder modelBuilder)
+    {
+      modelBuilder.Entity<TodoAiMetadata>(entityModel =>
+      {
+        entityModel.ToTable("TodoAiMetadata");
+        entityModel.HasKey(k => k.Id);
+        entityModel.HasIndex(k => k.TodoId).IsUnique();
+        
+        // Foreign key relationship
+        entityModel.HasOne(m => m.TodoTask)
+          .WithMany()
+          .HasForeignKey(m => m.TodoId)
+          .OnDelete(DeleteBehavior.Cascade);
       });
     }
   }

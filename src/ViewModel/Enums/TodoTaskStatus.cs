@@ -8,6 +8,7 @@ namespace Fistix.TaskManager.ViewModel.Enums
   {
     NotStarted = 1,
     InProgress = 2,
-    Completed = 3
+    Completed = 3,
+    Pending = 4,
   }
 }

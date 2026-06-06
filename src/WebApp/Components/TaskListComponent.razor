@@ -1,48 +1,123 @@
 ﻿@using Fistix.TaskManager.ViewModel.Dtos
-<table class="table">
-  <thead>
-    <tr>
-      <th>Id</th>
-      <th>Title</th>
-      <th>DueDate</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    @foreach (var task in Tasks)
-    {
-    <tr>
-      <td>
-        @task.Id
-      </td>
-      <td>
-        @task.Title
-      </td>
-      <td>
-        @task.DueDate
-      </td>
-      <td>
-        @task.Status
-      </td>
-    </tr>
-    }
-  </tbody>
-</table>
-<button class="btn btn-primary" @onclick="OnRefreshClick">Refresh</button>
+
+<!-- Task List Table -->
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead class="table-light">
+      <tr>
+        <th>Id</th>
+        <th>Title</th>
+        <th>Due Date</th>
+        <th>Status</th>
+        <th>Priority</th>
+        <th class="text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      @if (Tasks == null || Tasks.Count == 0)
+      {
+        <tr>
+          <td colspan="6" class="text-center text-muted">No tasks found</td>
+        </tr>
+      }
+      else
+      {
+        @foreach (var task in Tasks)
+        {
+          <tr>
+            <td>@task.ExternalId</td>
+            <td>@task.Title</td>
+            <td>@(task.DueDate?.ToString("MMM dd, yyyy") ?? "-")</td>
+            <td>
+              <span class="badge bg-info">@task.Status</span>
+            </td>
+            <td>
+              <span class="badge @GetPriorityBadgeClass(task.Priority)">@task.Priority</span>
+            </td>
+            <td class="text-center">
+              <button class="btn btn-sm btn-primary" @onclick="() => ShowTaskDetails(task)" title="View details">
+                📋 Details
+              </button>
+            </td>
+          </tr>
+        }
+      }
+    </tbody>
+  </table>
+</div>
+
+<!-- Refresh Button -->
+<div class="mt-3">
+  <button class="btn btn-secondary" @onclick="OnRefreshClick">🔄 Refresh</button>
+</div>
+
+<!-- Task Details Modal -->
+@if (SelectedTask != null)
+{
+  <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <!-- Modal Header -->
+        <div class="modal-header">
+          <h5 class="modal-title">Task Details</h5>
+          <button type="button" class="btn-close" @onclick="CloseTaskDetails" aria-label="Close"></button>
+        </div>
+        
+        <!-- Modal Body with TaskDetailsComponent -->
+        <div class="modal-body">
+          <TaskDetailsComponent 
+            Task="SelectedTask" 
+            OnEdit="EditTask"
+            OnClose="CloseTaskDetails">
+          </TaskDetailsComponent>
+        </div>
+      </div>
+    </div>
+  </div>
+}
 
 @code {
+  private TodoTaskDto? SelectedTask { get; set; }
 
   [Parameter]
-  public List<TodoTaskDto> Tasks { get; set; }
+  public List<TodoTaskDto> Tasks { get; set; } = new();
 
   [Parameter]
   public EventCallback OnRefresh { get; set; }
 
+  [Parameter]
+  public EventCallback<TodoTaskDto> OnEditTask { get; set; }
 
   private void OnRefreshClick()
   {
-    if(OnRefresh.HasDelegate)
+    if (OnRefresh.HasDelegate)
       OnRefresh.InvokeAsync();
   }
 
+  private void ShowTaskDetails(TodoTaskDto task)
+  {
+    SelectedTask = task;
+  }
+
+  private void CloseTaskDetails()
+  {
+    SelectedTask = null;
+  }
+
+  private async Task EditTask()
+  {
+    if (SelectedTask != null && OnEditTask.HasDelegate)
+    {
+      await OnEditTask.InvokeAsync(SelectedTask);
+    }
+    CloseTaskDetails();
+  }
+
+  private string GetPriorityBadgeClass(string? priority) => priority?.ToUpperInvariant() switch
+  {
+    "HIGH" => "bg-danger",
+    "MEDIUM" => "bg-warning text-dark",
+    "LOW" => "bg-success",
+    _ => "bg-secondary"
+  };
 }

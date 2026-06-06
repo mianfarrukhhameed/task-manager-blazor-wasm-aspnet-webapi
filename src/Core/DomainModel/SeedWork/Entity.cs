@@ -6,11 +6,12 @@ namespace Fistix.TaskManager.Core.DomainModel.SeedWork
 {
   public class Entity
   {
-    public Guid Id { get; protected set; }
+    public int Id { get; protected set; }
+    public Guid ExternalId { get; protected set; }
 
-    public void GenerateNewId()
+    public void GenerateNewExternalId()
     {
-      Id = Guid.NewGuid();
+      ExternalId = Guid.NewGuid();
     }
   }
 }

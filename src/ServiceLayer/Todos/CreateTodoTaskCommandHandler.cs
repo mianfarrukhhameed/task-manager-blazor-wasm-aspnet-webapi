@@ -26,9 +26,10 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
     public async Task<CreateTodoTaskCommandResult> Handle(CreateTodoTaskCommand command, CancellationToken cancellationToken)
     {
       var todoTask = _mapper.Map<TodoTask>(command);
-      todoTask.GenerateNewId();
+      todoTask.GenerateNewExternalId();
+      todoTask.CreatedOn = DateTime.UtcNow;
       await _todoTaskRepository.Create(todoTask, cancellationToken);
-      todoTask = await _todoTaskRepository.Get(todoTask.Id, cancellationToken);
+      todoTask = await _todoTaskRepository.Get(todoTask.ExternalId, cancellationToken);
 
       return new CreateTodoTaskCommandResult()
       {
