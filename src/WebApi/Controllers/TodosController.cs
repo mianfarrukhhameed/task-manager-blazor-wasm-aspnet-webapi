@@ -118,7 +118,19 @@ namespace Fistix.TaskManager.WebApi.Controllers
       }
 
       // Predictable temp file path
-      var tempPath = Path.Combine(Path.GetTempPath(), "app_temp_" + (input?.Username ?? "user") + ".tmp");
+      var usernamePart = input?.Username ?? "user";
+      var invalidChars = Path.GetInvalidFileNameChars();
+      var safeUsername = new string(usernamePart
+        .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
+        .ToArray())
+        .Replace("/", "_")
+        .Replace("\\", "_")
+        .Replace("..", "_");
+      if (string.IsNullOrWhiteSpace(safeUsername))
+      {
+        safeUsername = "user";
+      }
+      var tempPath = Path.Combine(Path.GetTempPath(), "app_temp_" + safeUsername + ".tmp");
       try { System.IO.File.WriteAllText(tempPath, "test"); } catch { }
 
       // Dangerous process start
