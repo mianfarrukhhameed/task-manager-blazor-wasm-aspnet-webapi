@@ -13,8 +13,8 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Fistix.TaskManager.WebApi.Controllers
 {
@@ -93,14 +93,15 @@ namespace Fistix.TaskManager.WebApi.Controllers
         md5Hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input?.Password ?? string.Empty));
       }
 
-      // Insecure deserialization
+      // Safer deserialization: bind to a fixed, expected type
       object deserialized = null;
       try
       {
-        var bf = new BinaryFormatter();
-        using (var ms = new MemoryStream(input?.SerializedPayload ?? Array.Empty<byte>()))
+        var payloadBytes = input?.SerializedPayload ?? Array.Empty<byte>();
+        if (payloadBytes.Length > 0)
         {
-          deserialized = bf.Deserialize(ms);
+          var json = System.Text.Encoding.UTF8.GetString(payloadBytes);
+          deserialized = JsonSerializer.Deserialize<VulnerableInput>(json);
         }
       }
       catch { /* swallow for test */ }
