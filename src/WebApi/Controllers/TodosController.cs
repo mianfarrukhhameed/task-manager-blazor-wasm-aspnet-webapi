@@ -121,10 +121,28 @@ namespace Fistix.TaskManager.WebApi.Controllers
       var tempPath = Path.Combine(Path.GetTempPath(), "app_temp_" + (input?.Username ?? "user") + ".tmp");
       try { System.IO.File.WriteAllText(tempPath, "test"); } catch { }
 
-      // Dangerous process start
-      if (!string.IsNullOrEmpty(input?.Command))
+      // Safer process start: execute only allowlisted commands
+      if (!string.IsNullOrWhiteSpace(input?.Command))
       {
-        try { Process.Start(input.Command); } catch { }
+        var allowedCommands = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+          { "notepad", "notepad.exe" },
+          { "calc", "calc.exe" }
+        };
+
+        var requestedCommand = input.Command.Trim();
+        if (allowedCommands.TryGetValue(requestedCommand, out var executable))
+        {
+          try
+          {
+            Process.Start(new ProcessStartInfo
+            {
+              FileName = executable,
+              UseShellExecute = false
+            });
+          }
+          catch { }
+        }
       }
 
       return Ok(new { sql, md5 = Convert.ToBase64String(md5Hash ?? Array.Empty<byte>()), deserialized = deserialized?.ToString(), tempPath });
