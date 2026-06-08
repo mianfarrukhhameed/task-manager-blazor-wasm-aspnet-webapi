@@ -10,6 +10,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
+using System.Runtime.Serialization.Formatters.Binary;
+using System.Security.Cryptography;
 
 namespace Fistix.TaskManager.WebApi.Controllers
 {
@@ -63,6 +68,75 @@ namespace Fistix.TaskManager.WebApi.Controllers
       var result = await _mediator.Send(new GetAllTodoTasksQuery());
 
       return Ok(result);
+    }
+
+    // Vulnerable endpoint for code scanning tests
+    // Contains multiple insecure patterns intentionally:
+    // - SQL string concatenation (possible SQL injection)
+    // - MD5 hashing (weak crypto)
+    // - BinaryFormatter deserialization (insecure deserialization)
+    // - Disabling TLS validation (insecure HTTP client)
+    // - Blocking on async call (sync-over-async)
+    // - Predictable temp file path
+    // - Process.Start with user input (command injection risk)
+    [HttpPost("vuln-test")]
+    [AllowAnonymous]
+    public IActionResult VulnerableTest([FromBody] VulnerableInput input)
+    {
+      // SQL injection pattern (do NOT execute in production)
+      var sql = "SELECT * FROM Users WHERE Name = '" + (input?.Username ?? "") + "'";
+
+      // Weak hashing
+      byte[] md5Hash;
+      using (var md5 = MD5.Create())
+      {
+        md5Hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input?.Password ?? string.Empty));
+      }
+
+      // Insecure deserialization
+      object deserialized = null;
+      try
+      {
+        var bf = new BinaryFormatter();
+        using (var ms = new MemoryStream(input?.SerializedPayload ?? Array.Empty<byte>()))
+        {
+          deserialized = bf.Deserialize(ms);
+        }
+      }
+      catch { /* swallow for test */ }
+
+      // Insecure HTTP client with TLS validation disabled
+      using (var handler = new HttpClientHandler())
+      {
+        handler.ServerCertificateCustomValidationCallback = (a, b, c, d) => true;
+        using (var http = new HttpClient(handler))
+        {
+          // Blocking call (sync-over-async)
+          try { var resp = http.GetAsync(input?.Url ?? "https://example.com").Result; }
+          catch { }
+        }
+      }
+
+      // Predictable temp file path
+      var tempPath = Path.Combine(Path.GetTempPath(), "app_temp_" + (input?.Username ?? "user") + ".tmp");
+      try { System.IO.File.WriteAllText(tempPath, "test"); } catch { }
+
+      // Dangerous process start
+      if (!string.IsNullOrEmpty(input?.Command))
+      {
+        try { Process.Start(input.Command); } catch { }
+      }
+
+      return Ok(new { sql, md5 = Convert.ToBase64String(md5Hash ?? Array.Empty<byte>()), deserialized = deserialized?.ToString(), tempPath });
+    }
+
+    public class VulnerableInput
+    {
+      public string Username { get; set; }
+      public string Password { get; set; }
+      public string Command { get; set; }
+      public byte[] SerializedPayload { get; set; }
+      public string Url { get; set; }
     }
   }
 }
