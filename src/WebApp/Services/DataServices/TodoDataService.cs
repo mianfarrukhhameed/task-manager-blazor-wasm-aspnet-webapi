@@ -45,5 +45,48 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<TodoTaskDto>> Put(UpdateTodoTaskCommand command)
+    {
+      var result = new ApiCallResult<TodoTaskDto>();
+      var response = await _httpClient.PutAsJsonAsync($"api/todos/{command.ExternalId}", command);
+
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<TodoTaskDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
+
+    public async Task<ApiCallResult<TaskSummaryDto>> Summarize(Guid todoExternalId, bool force = false)
+    {
+      var result = new ApiCallResult<TaskSummaryDto>();
+      var command = new SummarizeTodoTaskCommand
+      {
+        TodoExternalId = todoExternalId,
+        Force = force
+      };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/summarize", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<TaskSummaryDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }

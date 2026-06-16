@@ -11,6 +11,7 @@ public class AiConfiguration
     public AzureOpenAISettings AzureOpenAI { get; set; } = new();
     public OllamaSettings Ollama { get; set; } = new();
     public GoogleAISettings GoogleAI { get; set; } = new();
+    public ClaudeSettings Claude { get; set; } = new();
     public AiFeaturesConfiguration Features { get; set; } = new();
 }
 
@@ -36,8 +37,27 @@ public class OllamaSettings
 
 public class GoogleAISettings
 {
+    // API key (supports environment variable reference pattern: ${ENV_VAR})
     public string ApiKey { get; set; } = "";
-    public string Model { get; set; } = "gemini-1.5-flash";
+
+    // Optional path to a service account JSON file when using Vertex/GenAI with service-account credentials
+    public string ServiceAccountJsonPath { get; set; } = "";
+
+    // Model id (e.g. gemini-2.0-flash, gemini-1.5-flash-002)
+    public string Model { get; set; } = "gemini-2.0-flash";
+
+    // V1 or V1_Beta — most Gemini chat models require V1_Beta
+    public string ApiVersion { get; set; } = "V1_Beta";
+
+    // Used when the primary model returns transient errors (503/429)
+    public string[] FallbackModels { get; set; } = ["gemini-2.0-flash", "gemini-1.5-flash-002"];
+}
+
+public class ClaudeSettings
+{
+    public string ApiKey { get; set; } = "";
+    public string Model { get; set; } = "claude-3-5-sonnet-latest";
+    public string Endpoint { get; set; } = "https://api.anthropic.com";
 }
 
 public class AiFeaturesConfiguration

@@ -13,6 +13,7 @@ public class TodoAiMetadata
     public int Id { get; set; }
     public int TodoId { get; set; }
     public string? AiSummary { get; set; }
+    public string? AiSummaryModel { get; set; }
     public string? AiPriority { get; set; } // HIGH, MEDIUM, LOW
     public string? AiCategory { get; set; } // Frontend, Backend, etc
     public string? AiType { get; set; } // Task, Reminder, etc

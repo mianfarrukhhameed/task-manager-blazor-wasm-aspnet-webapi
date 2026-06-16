@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Fistix.TaskManager.WebApi</RootNamespace>
+    <UserSecretsId>fistix-task-manager-webapi-secrets</UserSecretsId>
   </PropertyGroup>
   
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -22,6 +23,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.0" NoWarn="NU1605" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.0" />
     <PackageReference Include="Microsoft.Azure.AppConfiguration.AspNetCore" Version="7.1.0" />
+    <PackageReference Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.3.2" />
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
     <PackageReference Include="Microsoft.ApplicationInsights" Version="2.23.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.23.0" />
   </ItemGroup>

@@ -15,5 +15,8 @@ namespace Fistix.TaskManager.ViewModel.Dtos
     public string? Priority { get; set; }
     public string? AssignedTo { get; set; }
     public string? Category { get; set; }
+    public string? AiSummary { get; set; }
+    public string? AiSummaryModel { get; set; }
+    public DateTime? AiSummaryGeneratedAt { get; set; }
   }
 }

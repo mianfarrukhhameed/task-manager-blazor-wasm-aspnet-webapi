@@ -41,7 +41,9 @@ namespace Fistix.TaskManager.DataLayer.Repositories
 
     public async Task<TodoTask> Get(Guid externalId, CancellationToken calcellationToken)
     {
-      var entity = await _context.TodoTasks.FirstOrDefaultAsync(t => t.ExternalId == externalId, calcellationToken);
+      var entity = await _context.TodoTasks
+        .Include(t => t.AiMetadata)
+        .FirstOrDefaultAsync(t => t.ExternalId == externalId, calcellationToken);
       if (entity == null)
         throw new NotFoundException();
 
@@ -50,7 +52,9 @@ namespace Fistix.TaskManager.DataLayer.Repositories
 
     public async Task<List<TodoTask>> GetAll(CancellationToken cancellationToken)
     {
-      return await _context.TodoTasks.ToListAsync();
+      return await _context.TodoTasks
+        .Include(t => t.AiMetadata)
+        .ToListAsync(cancellationToken);
     }
 
     public async Task<bool> Update(TodoTask todoTask, CancellationToken calcellationToken)

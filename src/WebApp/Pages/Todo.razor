@@ -59,6 +59,14 @@
               StateHasChanged();
             }
             break;
+
+          case nameof(UpdateTodoTaskCommand):
+            if (!x.IsSucceed)
+            {
+              _errorMessage = x.Message;
+              StateHasChanged();
+            }
+            break;
         }
       })
     );

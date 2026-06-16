@@ -42,6 +42,9 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                     b.Property<string>("AiSummary")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("AiSummaryModel")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AiType")
                         .HasColumnType("nvarchar(max)");
 

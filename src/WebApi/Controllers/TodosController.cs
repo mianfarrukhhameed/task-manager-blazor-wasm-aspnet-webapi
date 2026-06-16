@@ -64,5 +64,32 @@ namespace Fistix.TaskManager.WebApi.Controllers
 
       return Ok(result);
     }
+
+    [HttpPut("{externalId}")]
+    [ProducesResponseType(typeof(TodoTaskDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateTask(Guid externalId, [FromBody] UpdateTodoTaskCommand command)
+    {
+      if (!ModelState.IsValid)
+        return BadRequest(ModelState);
+
+      if (externalId != command.ExternalId)
+        return BadRequest(new ProblemDetails { Detail = "Route id does not match request body." });
+
+      try
+      {
+        var result = await _mediator.Send(command);
+        return Ok(result.Payload);
+      }
+      catch (Core.Exceptions.NotFoundException)
+      {
+        return NotFound();
+      }
+      catch (BadHttpRequestException ex)
+      {
+        return BadRequest(new ProblemDetails { Detail = ex.Message });
+      }
+    }
   }
 }

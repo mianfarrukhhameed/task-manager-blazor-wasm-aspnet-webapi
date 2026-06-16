@@ -12,6 +12,7 @@ namespace Fistix.TaskManager.DataLayer
     {
       services.AddDbContext<EfContext>(options => options.UseSqlServer(masterConfig.ConnectionString.MainDb));
       services.AddScoped<ITodoTaskRepository, TodoTaskRepository>();
+      services.AddScoped<ITodoAiMetadataRepository, TodoAiMetadataRepository>();
       services.AddScoped<IUserProfileRepository, UserProfileRepository>();
       services.AddScoped<IRepositoryFactory, RepositoryFactory>();
     }

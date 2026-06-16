@@ -1,0 +1,63 @@
+@using Fistix.TaskManager.ViewModel.Commands.Todos
+@using Fistix.TaskManager.ViewModel.Dtos
+
+<h3>Edit Task</h3>
+
+<EditForm Model="@Command" OnValidSubmit="@OnSubmit">
+  <p>
+    <label>
+      Title:
+      <InputText id="edit-title" @bind-Value="Command.Title" />
+      <ValidationMessage For="() => Command.Title" />
+    </label>
+  </p>
+  <p>
+    <label>
+      Description:
+      <InputTextArea id="edit-description" @bind-Value="Command.Description" />
+    </label>
+  </p>
+  <p>
+    <label>
+      Due Date:
+      <InputDate id="edit-dueDate" @bind-Value="Command.DueDate" />
+      <ValidationMessage For="() => Command.DueDate" />
+    </label>
+  </p>
+  <button class="btn btn-primary" type="submit">Save</button>
+  <button class="btn btn-secondary ms-2" type="button" @onclick="HandleCancel">Cancel</button>
+</EditForm>
+
+@code {
+    private UpdateTodoTaskCommand Command { get; set; } = new();
+
+    [Parameter]
+    public TodoTaskDto Task { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<UpdateTodoTaskCommand> OnSubmitForm { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        Command = new UpdateTodoTaskCommand
+        {
+            ExternalId = Task.ExternalId,
+            Title = Task.Title ?? string.Empty,
+            Description = Task.Description ?? string.Empty,
+            DueDate = Task.DueDate ?? DateTime.Today.AddDays(1)
+        };
+    }
+
+    private async Task OnSubmit()
+    {
+        await OnSubmitForm.InvokeAsync(Command);
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+}

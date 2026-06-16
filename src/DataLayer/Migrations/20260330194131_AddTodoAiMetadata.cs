@@ -19,6 +19,7 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     TodoId = table.Column<int>(type: "int", nullable: false),
                     AiSummary = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AiSummaryModel = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     AiPriority = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     AiCategory = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     AiType = table.Column<string>(type: "nvarchar(max)", nullable: true),

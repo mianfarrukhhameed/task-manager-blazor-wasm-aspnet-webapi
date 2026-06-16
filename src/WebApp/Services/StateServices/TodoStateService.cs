@@ -70,5 +70,25 @@ namespace Fistix.TaskManager.WebApp.Services.StateServices
         Message = apiCallResult.Message
       });
     }
+
+    public async void UpdateTodo(UpdateTodoTaskCommand command)
+    {
+      var apiCallResult = await _todoDataService.Put(command);
+      if (apiCallResult.IsSucceed)
+      {
+        var tasks = _todoSubject.Value
+          .Select(t => t.ExternalId == apiCallResult.Payload.ExternalId ? apiCallResult.Payload : t)
+          .ToList();
+
+        _todoSubject.OnNext(tasks);
+      }
+
+      _apiCallResult.OnNext(new ApiCallResult<string>()
+      {
+        IsSucceed = apiCallResult.IsSucceed,
+        Operation = nameof(UpdateTodoTaskCommand),
+        Message = apiCallResult.Message
+      });
+    }
   }
 }

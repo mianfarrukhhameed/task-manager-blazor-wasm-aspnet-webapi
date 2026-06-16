@@ -1,5 +1,5 @@
 @using Fistix.TaskManager.ViewModel.Dtos
-@using System.Net.Http.Json
+@using Fistix.TaskManager.WebApp.Services.DataServices
 @using Microsoft.Extensions.Logging
 
 <div class="task-details card">
@@ -41,7 +41,6 @@
                 </div>
             </div>
 
-            <!-- Loading State -->
             @if (IsLoading)
             {
                 <div class="spinner-border spinner-border-sm text-primary" role="status">
@@ -49,7 +48,6 @@
                 </div>
                 <span class="ms-2">Generating AI summary...</span>
             }
-            <!-- Error State -->
             else if (!string.IsNullOrEmpty(ErrorMessage))
             {
                 <div class="alert alert-warning mb-0">
@@ -57,16 +55,14 @@
                     <button class="btn btn-sm btn-outline-warning ms-2" @onclick="GenerateSummary">Try Again</button>
                 </div>
             }
-            <!-- Summary Display -->
             else if (!string.IsNullOrEmpty(Summary))
             {
                 <p class="mb-2">@Summary</p>
                 <small class="text-muted">
-                    Generated: @(SummaryGeneratedAt?.ToString("g") ?? "Unknown") | 
-                    Model: @(SummaryModel ?? "Unknown")
+                    Generated: @(SummaryGeneratedAt?.ToString("g") ?? "Unknown") |
+                    Model: @(SummaryModel ?? "Unknown")@(FromCache ? " | Cached" : "")
                 </small>
             }
-            <!-- Empty State -->
             else
             {
                 <p class="text-muted mb-0">
@@ -78,8 +74,8 @@
 
         <!-- Action Buttons -->
         <div>
-            <button class="btn btn-primary" @onclick="OnEdit">Edit</button>
-            <button class="btn btn-secondary" @onclick="OnClose">Close</button>
+            <button class="btn btn-primary" @onclick="HandleEdit">Edit</button>
+            <button class="btn btn-secondary" @onclick="HandleClose">Close</button>
         </div>
     </div>
 </div>
@@ -88,6 +84,7 @@
     private string? Summary { get; set; }
     private string? SummaryModel { get; set; }
     private DateTime? SummaryGeneratedAt { get; set; }
+    private bool FromCache { get; set; }
     private string? ErrorMessage { get; set; }
     private bool IsLoading { get; set; }
 
@@ -101,15 +98,36 @@
     public EventCallback OnClose { get; set; }
 
     [Inject]
-    public HttpClient HttpClient { get; set; } = default!;
+    public TodoDataService TodoDataService { get; set; } = default!;
 
     [Inject]
     public ILogger<TaskDetailsComponent> Logger { get; set; } = default!;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnParametersSet()
     {
-        // Optionally load summary on component init
-        // await GenerateSummary();
+        LoadSummaryFromTask();
+    }
+
+    private void LoadSummaryFromTask()
+    {
+        if (!string.IsNullOrWhiteSpace(Task.AiSummary))
+        {
+            Summary = Task.AiSummary;
+            SummaryModel = Task.AiSummaryModel;
+            SummaryGeneratedAt = Task.AiSummaryGeneratedAt;
+            FromCache = true;
+            ErrorMessage = null;
+        }
+    }
+
+    private async Task HandleEdit()
+    {
+        await OnEdit.InvokeAsync();
+    }
+
+    private async Task HandleClose()
+    {
+        await OnClose.InvokeAsync();
     }
 
     private async Task GenerateSummary()
@@ -132,26 +150,32 @@
 
         IsLoading = true;
         ErrorMessage = null;
-        Summary = null;
+
+        if (force)
+        {
+            Summary = null;
+        }
 
         try
         {
-            var query = $"?todoExternalId={Task.ExternalId}&title={Uri.EscapeDataString(Task.Title ?? "")}&description={Uri.EscapeDataString(Task.Description ?? "")}&force={force}";
-            var response = await HttpClient.PostAsync($"/api/ai/summarize{query}", null);
+            var result = await TodoDataService.Summarize(Task.ExternalId, force);
 
-            if (response.IsSuccessStatusCode)
+            if (result.IsSucceed && result.Payload != null)
             {
-                var result = await response.Content.ReadFromJsonAsync<TaskSummaryDto>();
-                Summary = result?.Summary;
-                SummaryModel = result?.Model;
-                SummaryGeneratedAt = result?.GeneratedAt;
+                Summary = result.Payload.Summary;
+                SummaryModel = result.Payload.Model;
+                SummaryGeneratedAt = result.Payload.GeneratedAt;
+                FromCache = result.Payload.FromCache;
                 ErrorMessage = null;
+
+                Task.AiSummary = result.Payload.Summary;
+                Task.AiSummaryModel = result.Payload.Model;
+                Task.AiSummaryGeneratedAt = result.Payload.GeneratedAt;
             }
             else
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                Logger.LogError($"Failed to generate summary: {response.StatusCode} - {errorContent}");
-                ErrorMessage = $"Failed: {response.StatusCode}";
+                Logger.LogError("Failed to generate summary: {Message}", result.Message);
+                ErrorMessage = result.Message ?? "Failed to generate summary";
             }
         }
         catch (Exception ex)

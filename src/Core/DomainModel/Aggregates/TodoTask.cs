@@ -15,5 +15,6 @@ namespace Fistix.TaskManager.Core.DomainModel.Aggregates
     public string Priority { get; set; } = "Medium";
     public string Category { get; set; }
     public string AssignedTo { get; set; }
+    public virtual TodoAiMetadata? AiMetadata { get; set; }
   }
 }

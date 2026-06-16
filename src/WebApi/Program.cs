@@ -1,3 +1,5 @@
+using Azure.Extensions.AspNetCore.Configuration;
+using Azure.Identity;
 using Fistix.TaskManager.Core.Config;
 using Fistix.TaskManager.ServiceLayer;
 using Fistix.TaskManager.ViewModel.Validators.Todos;
@@ -16,6 +18,13 @@ using System;
 using System.Collections.Generic;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var keyVaultUri = builder.Configuration["KeyVault:Uri"];
+
+if (builder.Environment.IsProduction() && !string.IsNullOrWhiteSpace(keyVaultUri))
+{
+    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
+}
 
 // Azure App Configuration (if available)
 var appConfigConnectionString = Environment.GetEnvironmentVariable("AppConfigConnectionString");

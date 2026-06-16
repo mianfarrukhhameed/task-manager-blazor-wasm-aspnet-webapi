@@ -1,13 +1,21 @@
+using Anthropic.SDK;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.AI;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.Connectors.Google;
+using Fistix.TaskManager.AiLayer.Abstractions;
 using Fistix.TaskManager.AiLayer.Shared;
 
 namespace Fistix.TaskManager.AiLayer.Implementations;
 
 /// <summary>
 /// Orchestrates Semantic Kernel initialization based on provider configuration.
-/// Supports multiple LLM providers: OpenAI, Azure OpenAI, and Ollama.
+/// Supports OpenAI, Azure OpenAI, Google Gemini, Claude (via Anthropic.SDK), and Ollama.
 /// </summary>
 public class SemanticKernelOrchestrator
 {
@@ -23,10 +31,6 @@ public class SemanticKernelOrchestrator
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    /// Creates and returns a configured Semantic Kernel instance.
-    /// Provider selection is based on appsettings.json "Ai:Provider" setting.
-    /// </summary>
     public async Task<Kernel> CreateKernelAsync()
     {
         if (_kernel != null)
@@ -61,23 +65,36 @@ public class SemanticKernelOrchestrator
                     break;
 
                 case "google":
-                    // Google AI support requires Google.Generative.AI NuGet package
-                    // For now, we implement a simple HTTP-based approach via custom GoogleAIService
-                    _logger.LogInformation("Configured Google AI provider with model: {Model}", aiConfig.GoogleAI.Model);
-                    // Note: Google AI will be called directly in SummarizationPipeline without Semantic Kernel
-                    // This allows flexibility to add Google support without version conflicts
-                    builder.AddOpenAIChatCompletion(
-                        modelId: aiConfig.OpenAI.Model,
-                        apiKey: ResolveApiKey(aiConfig.OpenAI.ApiKey));
+                    var googleApiVersion = ResolveGoogleApiVersion(aiConfig.GoogleAI.ApiVersion);
+                    builder.AddGoogleAIGeminiChatCompletion(
+                        modelId: aiConfig.GoogleAI.Model,
+                        apiKey: ResolveApiKey(aiConfig.GoogleAI.ApiKey),
+                        apiVersion: googleApiVersion,
+                        serviceId: string.Empty,
+                        httpClient: null);
+                    _logger.LogInformation(
+                        "Configured Google Gemini provider with model: {Model}, apiVersion: {ApiVersion}",
+                        aiConfig.GoogleAI.Model,
+                        googleApiVersion);
+                    break;
+
+                case "claude":
+                    RegisterClaudeChatCompletion(builder, aiConfig);
+                    _logger.LogInformation("Configured Claude provider via Anthropic.SDK with model: {Model}", aiConfig.Claude.Model);
                     break;
 
                 case "ollama":
-                    // Note: This requires OllamaSharp or similar connector
-                    // For now, we'll fall back to OpenAI to ensure Phase 1 works
-                    _logger.LogWarning("Ollama provider requested but not yet implemented. Falling back to OpenAI.");
+                    var ollamaEndpoint = aiConfig.Ollama.Endpoint?.Trim().TrimEnd('/') ?? "http://localhost:11434";
+                    if (!ollamaEndpoint.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ollamaEndpoint += "/v1";
+                    }
+
                     builder.AddOpenAIChatCompletion(
-                        modelId: aiConfig.OpenAI.Model,
-                        apiKey: ResolveApiKey(aiConfig.OpenAI.ApiKey));
+                        modelId: aiConfig.Ollama.Model,
+                        apiKey: "ollama",
+                        endpoint: new Uri(ollamaEndpoint));
+                    _logger.LogInformation("Configured Ollama provider with model: {Model} at endpoint: {Endpoint}", aiConfig.Ollama.Model, ollamaEndpoint);
                     break;
 
                 default:
@@ -96,26 +113,89 @@ public class SemanticKernelOrchestrator
     }
 
     /// <summary>
-    /// Resolves API key from environment variable or configuration.
-    /// Environment variables take precedence over configuration values.
+    /// Builds a short-lived kernel for a specific Google model (used for fallback on transient errors).
     /// </summary>
+    public Kernel CreateGoogleKernel(AiConfiguration aiConfig, string modelId)
+    {
+        var builder = Kernel.CreateBuilder();
+        var googleApiVersion = ResolveGoogleApiVersion(aiConfig.GoogleAI.ApiVersion);
+
+        builder.AddGoogleAIGeminiChatCompletion(
+            modelId: modelId,
+            apiKey: ResolveApiKey(aiConfig.GoogleAI.ApiKey),
+            apiVersion: googleApiVersion,
+            serviceId: string.Empty,
+            httpClient: null);
+
+        return builder.Build();
+    }
+
+    private void RegisterClaudeChatCompletion(IKernelBuilder builder, AiConfiguration aiConfig)
+    {
+        var apiKey = ResolveApiKey(aiConfig.Claude.ApiKey);
+        var anthropicClient = new AnthropicClient(apiKey);
+        IChatClient chatClient = anthropicClient.Messages;
+
+        builder.Services.AddSingleton(chatClient);
+        builder.Services.AddSingleton<IChatCompletionService>(sp =>
+            chatClient.AsChatCompletionService(sp));
+    }
+
+    private static GoogleAIVersion ResolveGoogleApiVersion(string? configuredValue)
+    {
+        return configuredValue?.Trim().ToLowerInvariant() switch
+        {
+            "v1" => GoogleAIVersion.V1,
+            "v1_beta" or "v1beta" or "v1-beta" => GoogleAIVersion.V1_Beta,
+            _ => GoogleAIVersion.V1_Beta,
+        };
+    }
+
     private string ResolveApiKey(string configuredValue)
     {
-        // Check if value is an environment variable reference (${VARIABLE_NAME})
-        if (!string.IsNullOrEmpty(configuredValue) && configuredValue.StartsWith("${") && configuredValue.EndsWith("}"))
+        if (string.IsNullOrWhiteSpace(configuredValue))
         {
-            var envVarName = configuredValue[2..^1]; // Extract variable name
+            throw new InvalidOperationException("API key is not configured");
+        }
+
+        if (configuredValue.StartsWith("${", StringComparison.Ordinal) && configuredValue.EndsWith("}", StringComparison.Ordinal))
+        {
+            var envVarName = configuredValue[2..^1];
             var envValue = Environment.GetEnvironmentVariable(envVarName);
 
-            if (string.IsNullOrEmpty(envValue))
+            if (string.IsNullOrWhiteSpace(envValue))
             {
-                throw new InvalidOperationException(
-                    $"Environment variable '{envVarName}' is not set. Required for AI configuration.");
+                throw new InvalidOperationException($"Environment variable '{envVarName}' is not set. Required for AI configuration.");
             }
 
             return envValue;
         }
 
-        return configuredValue ?? throw new InvalidOperationException("API key is not configured");
+        return configuredValue;
+    }
+}
+
+public class SemanticKernelLlmProvider : ILlmProviderService
+{
+    private readonly Kernel _kernel;
+    private readonly ILogger<SemanticKernelLlmProvider> _logger;
+
+    public SemanticKernelLlmProvider(
+        Kernel kernel,
+        ILogger<SemanticKernelLlmProvider> logger)
+    {
+        _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public async Task<string> GetCompletionAsync(string prompt, CancellationToken cancellationToken = default)
+    {
+        var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>();
+        var response = await chatCompletionService.GetChatMessageContentAsync(
+            new ChatHistory(prompt),
+            kernel: _kernel,
+            cancellationToken: cancellationToken);
+
+        return response.Content?.Trim() ?? string.Empty;
     }
 }

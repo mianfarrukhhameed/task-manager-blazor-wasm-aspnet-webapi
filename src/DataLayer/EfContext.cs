@@ -55,10 +55,9 @@ namespace Fistix.TaskManager.DataLayer
         entityModel.HasKey(k => k.Id);
         entityModel.HasIndex(k => k.TodoId).IsUnique();
         
-        // Foreign key relationship
         entityModel.HasOne(m => m.TodoTask)
-          .WithMany()
-          .HasForeignKey(m => m.TodoId)
+          .WithOne(t => t.AiMetadata)
+          .HasForeignKey<TodoAiMetadata>(m => m.TodoId)
           .OnDelete(DeleteBehavior.Cascade);
       });
     }

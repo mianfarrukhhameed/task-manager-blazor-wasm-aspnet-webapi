@@ -14,7 +14,10 @@ namespace Fistix.TaskManager.Core.AutoMapperProfiles
                 .ForMember(up => up.Id, m => m.Ignore())
                 .ForMember(up => up.CreatedOn, m => m.MapFrom(x => DateTime.Now));
 
-      CreateMap<TodoTask, TodoTaskDto>();
+      CreateMap<TodoTask, TodoTaskDto>()
+        .ForMember(d => d.AiSummary, o => o.MapFrom(s => s.AiMetadata != null ? s.AiMetadata.AiSummary : null))
+        .ForMember(d => d.AiSummaryModel, o => o.MapFrom(s => s.AiMetadata != null ? s.AiMetadata.AiSummaryModel : null))
+        .ForMember(d => d.AiSummaryGeneratedAt, o => o.MapFrom(s => s.AiMetadata != null ? s.AiMetadata.UpdatedAt ?? s.AiMetadata.CreatedAt : (DateTime?)null));
     }
   }
 }

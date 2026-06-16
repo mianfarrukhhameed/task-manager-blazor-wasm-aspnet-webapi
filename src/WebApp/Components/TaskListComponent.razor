@@ -1,4 +1,7 @@
 ﻿@using Fistix.TaskManager.ViewModel.Dtos
+@using Fistix.TaskManager.ViewModel.Commands.Todos
+@using Fistix.TaskManager.WebApp.Services.StateServices
+@inject TodoStateService TodoStateService
 
 <!-- Task List Table -->
 <div class="table-responsive">
@@ -57,16 +60,13 @@
   <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
       <div class="modal-content">
-        <!-- Modal Header -->
         <div class="modal-header">
           <h5 class="modal-title">Task Details</h5>
           <button type="button" class="btn-close" @onclick="CloseTaskDetails" aria-label="Close"></button>
         </div>
-        
-        <!-- Modal Body with TaskDetailsComponent -->
         <div class="modal-body">
-          <TaskDetailsComponent 
-            Task="SelectedTask" 
+          <TaskDetailsComponent
+            Task="SelectedTask"
             OnEdit="EditTask"
             OnClose="CloseTaskDetails">
           </TaskDetailsComponent>
@@ -76,17 +76,37 @@
   </div>
 }
 
+<!-- Edit Task Modal -->
+@if (EditingTask != null)
+{
+  <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Task</h5>
+          <button type="button" class="btn-close" @onclick="CloseEditTask" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <EditTaskComponent
+            Task="EditingTask"
+            OnSubmitForm="SaveEditTask"
+            OnCancel="CloseEditTask">
+          </EditTaskComponent>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
 @code {
   private TodoTaskDto? SelectedTask { get; set; }
+  private TodoTaskDto? EditingTask { get; set; }
 
   [Parameter]
   public List<TodoTaskDto> Tasks { get; set; } = new();
 
   [Parameter]
   public EventCallback OnRefresh { get; set; }
-
-  [Parameter]
-  public EventCallback<TodoTaskDto> OnEditTask { get; set; }
 
   private void OnRefreshClick()
   {
@@ -104,13 +124,26 @@
     SelectedTask = null;
   }
 
-  private async Task EditTask()
+  private void EditTask()
   {
-    if (SelectedTask != null && OnEditTask.HasDelegate)
+    if (SelectedTask == null)
     {
-      await OnEditTask.InvokeAsync(SelectedTask);
+      return;
     }
+
+    EditingTask = SelectedTask;
     CloseTaskDetails();
+  }
+
+  private void CloseEditTask()
+  {
+    EditingTask = null;
+  }
+
+  private void SaveEditTask(UpdateTodoTaskCommand command)
+  {
+    TodoStateService.UpdateTodo(command);
+    CloseEditTask();
   }
 
   private string GetPriorityBadgeClass(string? priority) => priority?.ToUpperInvariant() switch
