@@ -1,3 +1,4 @@
+using Fistix.TaskManager.Core.Exceptions;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using Fistix.TaskManager.WebApi.Extensions;
@@ -50,6 +51,10 @@ public class AiController : ControllerBase
         {
             _logger.LogWarning(ex, "Invalid summarization request for todo {TodoExternalId}", command.TodoExternalId);
             return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {

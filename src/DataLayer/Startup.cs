@@ -3,6 +3,7 @@ using Fistix.TaskManager.Core.Config;
 using Fistix.TaskManager.DataLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System;
 
 namespace Fistix.TaskManager.DataLayer
 {
@@ -15,6 +16,13 @@ namespace Fistix.TaskManager.DataLayer
       services.AddScoped<ITodoAiMetadataRepository, TodoAiMetadataRepository>();
       services.AddScoped<IUserProfileRepository, UserProfileRepository>();
       services.AddScoped<IRepositoryFactory, RepositoryFactory>();
+    }
+
+    public static void ApplyMigrations(IServiceProvider serviceProvider)
+    {
+      using var scope = serviceProvider.CreateScope();
+      var context = scope.ServiceProvider.GetRequiredService<EfContext>();
+      context.Database.Migrate();
     }
   }
 }

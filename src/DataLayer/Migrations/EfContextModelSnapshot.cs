@@ -39,6 +39,9 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                     b.Property<string>("AiSummary")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("AiSummaryModel")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AiType")
                         .HasColumnType("nvarchar(max)");
 
@@ -76,6 +79,9 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                     b.Property<string>("Category")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
@@ -100,6 +106,8 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("ExternalId")
                         .IsUnique();
@@ -135,12 +143,17 @@ namespace Fistix.TaskManager.DataLayer.Migrations
             modelBuilder.Entity("Fistix.TaskManager.Core.DomainModel.Aggregates.TodoAiMetadata", b =>
                 {
                     b.HasOne("Fistix.TaskManager.Core.DomainModel.Aggregates.TodoTask", "TodoTask")
-                        .WithMany()
-                        .HasForeignKey("TodoId")
+                        .WithOne("AiMetadata")
+                        .HasForeignKey("Fistix.TaskManager.Core.DomainModel.Aggregates.TodoAiMetadata", "TodoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("TodoTask");
+                });
+
+            modelBuilder.Entity("Fistix.TaskManager.Core.DomainModel.Aggregates.TodoTask", b =>
+                {
+                    b.Navigation("AiMetadata");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using Fistix.TaskManager.Core.Abstractions.Repositories;
+using Fistix.TaskManager.Core.Abstractions.Services;
 using Fistix.TaskManager.Core.DomainModel.Aggregates;
+using Fistix.TaskManager.Core.SecurityModel;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using MediatR;
@@ -16,11 +18,16 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
   {
     private readonly IMapper _mapper;
     private readonly ITodoTaskRepository _todoTaskRepository;
+    private readonly ICurrentUserService _currentUserService;
 
-    public CreateTodoTaskCommandHandler(IMapper mapper, ITodoTaskRepository todoTaskRepository)
+    public CreateTodoTaskCommandHandler(
+      IMapper mapper,
+      ITodoTaskRepository todoTaskRepository,
+      ICurrentUserService currentUserService)
     {
       _mapper = mapper;
       _todoTaskRepository = todoTaskRepository;
+      _currentUserService = currentUserService;
     }
 
     public async Task<CreateTodoTaskCommandResult> Handle(CreateTodoTaskCommand command, CancellationToken cancellationToken)
@@ -28,6 +35,7 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
       var todoTask = _mapper.Map<TodoTask>(command);
       todoTask.GenerateNewExternalId();
       todoTask.CreatedOn = DateTime.UtcNow;
+      todoTask.CreatedByUserId = TodoAccessGuard.RequireCurrentUserId(_currentUserService);
       await _todoTaskRepository.Create(todoTask, cancellationToken);
       todoTask = await _todoTaskRepository.Get(todoTask.ExternalId, cancellationToken);
 

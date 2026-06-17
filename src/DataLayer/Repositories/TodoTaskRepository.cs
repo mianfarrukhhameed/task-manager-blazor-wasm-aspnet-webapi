@@ -4,6 +4,7 @@ using Fistix.TaskManager.Core.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,6 +55,14 @@ namespace Fistix.TaskManager.DataLayer.Repositories
     {
       return await _context.TodoTasks
         .Include(t => t.AiMetadata)
+        .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<TodoTask>> GetByOwner(Guid ownerExternalId, CancellationToken cancellationToken)
+    {
+      return await _context.TodoTasks
+        .Include(t => t.AiMetadata)
+        .Where(t => t.CreatedByUserId == ownerExternalId)
         .ToListAsync(cancellationToken);
     }
 

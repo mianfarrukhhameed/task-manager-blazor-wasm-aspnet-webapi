@@ -1,6 +1,7 @@
 using Azure.Extensions.AspNetCore.Configuration;
 using Azure.Identity;
 using Fistix.TaskManager.Core.Config;
+using Fistix.TaskManager.DataLayer;
 using Fistix.TaskManager.ServiceLayer;
 using Fistix.TaskManager.ViewModel.Validators.Todos;
 using Fistix.TaskManager.WebApi.Extensions;
@@ -56,6 +57,11 @@ builder.Services.AddCommonServices(masterConfig);
 builder.Services.AddAiServices();  // Add AI services
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    Fistix.TaskManager.DataLayer.Startup.ApplyMigrations(app.Services);
+}
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())

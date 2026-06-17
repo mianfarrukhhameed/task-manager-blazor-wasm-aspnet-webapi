@@ -14,5 +14,6 @@ namespace Fistix.TaskManager.Core.Abstractions.Repositories
     public Task<bool> Delete(Guid id, CancellationToken cancellationToken);
     public Task<TodoTask> Get(Guid id, CancellationToken cancellationToken);
     public Task<List<TodoTask>> GetAll(CancellationToken cancellationToken);
+    public Task<List<TodoTask>> GetByOwner(Guid ownerExternalId, CancellationToken cancellationToken);
   }
 }

@@ -1,4 +1,4 @@
-﻿using Fistix.TaskManager.Core.SecurityModel;
+﻿using Fistix.TaskManager.Core.Exceptions;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using Fistix.TaskManager.ViewModel.Queries.Todos;
@@ -57,6 +57,10 @@ namespace Fistix.TaskManager.WebApi.Controllers
           Detail = ex.Message
         });
       }
+      catch (ForbiddenAccessException)
+      {
+        return Forbid();
+      }
       catch (Exception ex)
       {
         _logger.LogError(ex, "Error creating todo task");
@@ -65,18 +69,25 @@ namespace Fistix.TaskManager.WebApi.Controllers
     }
 
     [HttpGet]
-    [Authorize(PolicyNames.IsAdmin)]
-    [ProducesResponseType(typeof(GetAllTodoTasksQueryResult), StatusCodes.Status200OK)]    
+    [ProducesResponseType(typeof(GetAllTodoTasksQueryResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllTodoTasks()
-    {      
-      var result = await _mediator.Send(new GetAllTodoTasksQuery());
-
-      return Ok(result);
+    {
+      try
+      {
+        var result = await _mediator.Send(new GetAllTodoTasksQuery());
+        return Ok(result);
+      }
+      catch (ForbiddenAccessException)
+      {
+        return Forbid();
+      }
     }
 
     [HttpPut("{externalId}")]
     [ProducesResponseType(typeof(TodoTaskDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateTask(Guid externalId, [FromBody] UpdateTodoTaskCommand command)
     {
@@ -94,6 +105,10 @@ namespace Fistix.TaskManager.WebApi.Controllers
       catch (Core.Exceptions.NotFoundException)
       {
         return NotFound();
+      }
+      catch (ForbiddenAccessException)
+      {
+        return Forbid();
       }
       catch (BadHttpRequestException ex)
       {

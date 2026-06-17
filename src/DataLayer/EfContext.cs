@@ -37,6 +37,9 @@ namespace Fistix.TaskManager.DataLayer
           .IsRequired();
         entityModel.HasIndex(k => k.ExternalId)
           .IsUnique();
+        entityModel.Property(p => p.CreatedByUserId)
+          .IsRequired();
+        entityModel.HasIndex(p => p.CreatedByUserId);
       });
     }
     private void UserProfileModelConfig(ModelBuilder modelBuilder)

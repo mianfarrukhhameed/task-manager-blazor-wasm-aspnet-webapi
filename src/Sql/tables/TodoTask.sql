@@ -1,8 +1,17 @@
 ﻿CREATE TABLE [dbo].[TodoTask]
 (
-  [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, 
-    [Title] VARCHAR(50) NOT NULL, 
-    [Description] VARCHAR(50) NULL, 
-    [DueDate] DATETIME NOT NULL, 
-    [CreatedOn] DATETIME NOT NULL
-)
+  [Id] INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+  [ExternalId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+  [Title] NVARCHAR(MAX) NOT NULL,
+  [Description] NVARCHAR(MAX) NULL,
+  [DueDate] DATETIME2 NOT NULL,
+  [CreatedOn] DATETIME2 NOT NULL,
+  [Status] NVARCHAR(MAX) NULL,
+  [Priority] NVARCHAR(MAX) NULL,
+  [Category] NVARCHAR(MAX) NULL,
+  [AssignedTo] NVARCHAR(MAX) NULL,
+  [CreatedByUserId] UNIQUEIDENTIFIER NOT NULL,
+  CONSTRAINT [UQ_TodoTask_ExternalId] UNIQUE ([ExternalId])
+);
+
+CREATE INDEX [IX_TodoTask_CreatedByUserId] ON [dbo].[TodoTask]([CreatedByUserId]);
