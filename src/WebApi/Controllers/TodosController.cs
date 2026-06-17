@@ -2,10 +2,12 @@
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using Fistix.TaskManager.ViewModel.Queries.Todos;
+using Fistix.TaskManager.WebApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,11 +20,13 @@ namespace Fistix.TaskManager.WebApi.Controllers
   [Authorize]
   public class TodosController : ControllerBase
   {
-    private readonly IMediator _mediator = null;
+    private readonly IMediator _mediator;
+    private readonly ILogger<TodosController> _logger;
 
-    public TodosController(IMediator mediator)
+    public TodosController(IMediator mediator, ILogger<TodosController> logger)
     {
       _mediator = mediator;
+      _logger = logger;
     }
 
     [HttpPost]
@@ -52,7 +56,12 @@ namespace Fistix.TaskManager.WebApi.Controllers
         {
           Detail = ex.Message
         });
-      }      
+      }
+      catch (Exception ex)
+      {
+        _logger.LogError(ex, "Error creating todo task");
+        return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to create task");
+      }
     }
 
     [HttpGet]
@@ -89,6 +98,11 @@ namespace Fistix.TaskManager.WebApi.Controllers
       catch (BadHttpRequestException ex)
       {
         return BadRequest(new ProblemDetails { Detail = ex.Message });
+      }
+      catch (Exception ex)
+      {
+        _logger.LogError(ex, "Error updating todo task {ExternalId}", externalId);
+        return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to update task");
       }
     }
   }

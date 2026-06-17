@@ -142,7 +142,14 @@ SUMMARY:";
         var renderedPrompt = RenderPrompt(arguments);
 
         _logger.LogInformation(
-            "LLM request -> Provider: {Provider}, Model: {Model}, Title: {Title}, Description: {Description}, Prompt: {Prompt}",
+            "LLM request -> Provider: {Provider}, Model: {Model}, TitleLength: {TitleLength}, DescriptionLength: {DescriptionLength}",
+            _aiConfig.Provider,
+            modelLabel,
+            arguments["title"]?.ToString()?.Length ?? 0,
+            arguments["description"]?.ToString()?.Length ?? 0);
+
+        _logger.LogDebug(
+            "LLM request details -> Provider: {Provider}, Model: {Model}, Title: {Title}, Description: {Description}, Prompt: {Prompt}",
             _aiConfig.Provider,
             modelLabel,
             arguments["title"],
@@ -155,7 +162,13 @@ SUMMARY:";
             var rawResponse = result.GetValue<string>()?.Trim() ?? string.Empty;
 
             _logger.LogInformation(
-                "LLM response <- Provider: {Provider}, Model: {Model}, RawResponse: {RawResponse}",
+                "LLM response <- Provider: {Provider}, Model: {Model}, ResponseLength: {ResponseLength}",
+                _aiConfig.Provider,
+                modelLabel,
+                rawResponse.Length);
+
+            _logger.LogDebug(
+                "LLM response details <- Provider: {Provider}, Model: {Model}, RawResponse: {RawResponse}",
                 _aiConfig.Provider,
                 modelLabel,
                 rawResponse);
@@ -165,10 +178,16 @@ SUMMARY:";
         catch (HttpOperationException httpEx)
         {
             _logger.LogWarning(
-                "LLM error <- Provider: {Provider}, Model: {Model}, Status: {StatusCode}, Response: {ErrorResponse}",
+                "LLM error <- Provider: {Provider}, Model: {Model}, Status: {StatusCode}",
                 _aiConfig.Provider,
                 modelLabel,
-                httpEx.StatusCode,
+                httpEx.StatusCode);
+
+            _logger.LogDebug(
+                httpEx,
+                "LLM error details <- Provider: {Provider}, Model: {Model}, Response: {ErrorResponse}",
+                _aiConfig.Provider,
+                modelLabel,
                 httpEx.ResponseContent);
             throw;
         }

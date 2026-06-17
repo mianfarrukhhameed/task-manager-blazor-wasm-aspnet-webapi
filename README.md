@@ -46,3 +46,53 @@ sequenceDiagram
     State->>State: Update BehaviorSubject
     State-->>Blazor: Observable Push
     Note over Blazor: UI Updates Automatically
+
+---
+
+## Configuration
+
+Secrets and environment-specific values are **not** committed to source control. Set them via environment variables, `dotnet user-secrets` (local development), Azure App Configuration, or Azure Key Vault (production).
+
+### Web API environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ConnectionStrings__MainDb` | Yes | SQL Server connection string for the main database |
+| `Ai__GoogleAI__ApiKey` | When `Ai:Provider` is `google` | Google AI (Gemini) API key |
+| `Ai__Claude__ApiKey` | When `Ai:Provider` is `claude` | Anthropic API key |
+| `Ai__OpenAI__ApiKey` | When `Ai:Provider` is `openai` | OpenAI API key |
+| `App__ApiAccessKey` | Optional | API access key if the `HaveApiAccessKey` filter is enabled |
+| `AppConfigConnectionString` | Optional | Azure App Configuration connection string |
+| `AppConfigEnvironmentName` | Optional | Azure App Configuration label filter (e.g. `dev`, `prod`) |
+| `KeyVault__Uri` | Production | Azure Key Vault URI; loaded when `ASPNETCORE_ENVIRONMENT` is `Production` |
+
+
+### Local development setup
+
+1. Copy required values into `src/WebApi/Properties/launchSettings.json` under `environmentVariables`, **or** use user secrets:
+
+```bash
+cd src/WebApi
+dotnet user-secrets set "ConnectionStrings:MainDb" "Server=localhost,1433;Database=Task-db;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
+```
+
+2. Export AI keys in your shell or IDE run configuration (`launchSettings.json` environment variables):
+
+```bash
+export Ai__GoogleAI__ApiKey="your-google-ai-key"
+export Ai__Claude__ApiKey="your-anthropic-key"
+```
+
+3. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored; use placeholders only in tracked files.
+
+### Logging
+
+LLM prompts and task content are logged at **Debug** level only. At **Information** level, the AI pipeline logs metadata (provider, model, content lengths) without user data. Enable Debug logging locally when troubleshooting summarization:
+
+```json
+"Logging": {
+  "LogLevel": {
+    "Fistix.TaskManager.AiLayer": "Debug"
+  }
+}
+```

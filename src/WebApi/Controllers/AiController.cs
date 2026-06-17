@@ -1,5 +1,6 @@
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
+using Fistix.TaskManager.WebApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,7 +54,7 @@ public class AiController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating summary for todo {TodoExternalId}", command.TodoExternalId);
-            return StatusCode(500, new { error = "Failed to generate summary", details = ex.Message });
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to generate summary");
         }
     }
 }
