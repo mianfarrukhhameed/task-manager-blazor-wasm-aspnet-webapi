@@ -1,27 +1,29 @@
 @using Fistix.TaskManager.ViewModel.Commands.Todos
 @using Fistix.TaskManager.ViewModel.Dtos
+@using FluentValidation
 
 <h3>Edit Task</h3>
 
-<EditForm Model="@Command" OnValidSubmit="@OnSubmit">
+<EditForm Model="@Command" OnSubmit="HandleSubmit">
   <p>
     <label>
       Title:
       <InputText id="edit-title" @bind-Value="Command.Title" />
-      <ValidationMessage For="() => Command.Title" />
+      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.Title))</span>
     </label>
   </p>
   <p>
     <label>
       Description:
       <InputTextArea id="edit-description" @bind-Value="Command.Description" />
+      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.Description))</span>
     </label>
   </p>
   <p>
     <label>
       Due Date:
       <InputDate id="edit-dueDate" @bind-Value="Command.DueDate" />
-      <ValidationMessage For="() => Command.DueDate" />
+      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.DueDate))</span>
     </label>
   </p>
   <button class="btn btn-primary" type="submit">Save</button>
@@ -29,7 +31,11 @@
 </EditForm>
 
 @code {
+    [Inject]
+    private IValidator<UpdateTodoTaskCommand> Validator { get; set; } = default!;
+
     private UpdateTodoTaskCommand Command { get; set; } = new();
+    private Dictionary<string, string> _errors = new();
 
     [Parameter]
     public TodoTaskDto Task { get; set; } = new();
@@ -49,10 +55,26 @@
             Description = Task.Description ?? string.Empty,
             DueDate = Task.DueDate ?? DateTime.Today.AddDays(1)
         };
+        _errors.Clear();
     }
 
-    private async Task OnSubmit()
+    private string GetError(string field) =>
+        _errors.TryGetValue(field, out var message) ? message : string.Empty;
+
+    private async Task HandleSubmit()
     {
+        _errors.Clear();
+        var result = await Validator.ValidateAsync(Command);
+        if (!result.IsValid)
+        {
+            foreach (var failure in result.Errors)
+            {
+                _errors[failure.PropertyName] = failure.ErrorMessage;
+            }
+
+            return;
+        }
+
         await OnSubmitForm.InvokeAsync(Command);
     }
 

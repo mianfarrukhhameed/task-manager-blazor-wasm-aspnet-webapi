@@ -1,7 +1,9 @@
 using Fistix.TaskManager.AiLayer.Implementations;
 using Fistix.TaskManager.AiLayer.Models;
+using Fistix.TaskManager.AiLayer.Shared;
 using Fistix.TaskManager.Core.Abstractions.Repositories;
 using Fistix.TaskManager.Core.Abstractions.Services;
+using Fistix.TaskManager.Core.Exceptions;
 using Fistix.TaskManager.Core.SecurityModel;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
@@ -19,6 +21,7 @@ public class SummarizeTodoTaskCommandHandler : IRequestHandler<SummarizeTodoTask
     private readonly ITodoAiMetadataRepository _todoAiMetadataRepository;
     private readonly SummarizationPipeline _summarizationPipeline;
     private readonly ICurrentUserService _currentUserService;
+    private readonly AiConfiguration _aiConfig;
     private readonly ILogger<SummarizeTodoTaskCommandHandler> _logger;
 
     public SummarizeTodoTaskCommandHandler(
@@ -26,17 +29,24 @@ public class SummarizeTodoTaskCommandHandler : IRequestHandler<SummarizeTodoTask
         ITodoAiMetadataRepository todoAiMetadataRepository,
         SummarizationPipeline summarizationPipeline,
         ICurrentUserService currentUserService,
+        AiConfiguration aiConfig,
         ILogger<SummarizeTodoTaskCommandHandler> logger)
     {
         _todoTaskRepository = todoTaskRepository;
         _todoAiMetadataRepository = todoAiMetadataRepository;
         _summarizationPipeline = summarizationPipeline;
         _currentUserService = currentUserService;
+        _aiConfig = aiConfig;
         _logger = logger;
     }
 
     public async Task<SummarizeTodoTaskCommandResult> Handle(SummarizeTodoTaskCommand command, CancellationToken cancellationToken)
     {
+        if (!_aiConfig.Features.EnableSummarization)
+        {
+            throw new FeatureDisabledException("AI summarization");
+        }
+
         var todo = await _todoTaskRepository.Get(command.TodoExternalId, cancellationToken);
 
         TodoAccessGuard.EnsureCanAccess(todo, _currentUserService);

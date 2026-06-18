@@ -4,6 +4,7 @@ using Fistix.TaskManager.ViewModel.Dtos;
 using Fistix.TaskManager.WebApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
@@ -33,19 +34,33 @@ public class AiController : ControllerBase
     /// Title and description are loaded from the database; only the task id and force flag are required.
     /// </summary>
     [HttpPost("summarize")]
+    [ProducesResponseType(typeof(TaskSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<TaskSummaryDto>> Summarize([FromBody] SummarizeTodoTaskCommand command)
     {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
         try
         {
             _logger.LogInformation("Summarization request for todo {TodoExternalId}", command.TodoExternalId);
 
-            if (command.TodoExternalId == Guid.Empty)
-            {
-                return BadRequest("A valid todoExternalId is required");
-            }
-
             var result = await _mediator.Send(command);
             return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            _logger.LogWarning(ex, "Summarization feature disabled for todo {TodoExternalId}", command.TodoExternalId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI summarization is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
         }
         catch (InvalidOperationException ex)
         {

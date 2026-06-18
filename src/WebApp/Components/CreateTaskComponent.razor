@@ -1,41 +1,60 @@
 ﻿@using Fistix.TaskManager.ViewModel.Commands.Todos
+@using FluentValidation
  
 <h3>Create New Task</h3>
 
-<EditForm Model="@Command" OnValidSubmit="@OnSubmit">  
-  @* <FluentValidator></FluentValidator>   *@
+<EditForm Model="@Command" OnSubmit="HandleSubmit">
   <p>
     <label>
       Title:
       <InputText id="title" @bind-Value="Command.Title" />
-      <ValidationMessage For="()=>Command.Title" />
+      <span class="validation-message">@GetError(nameof(CreateTodoTaskCommand.Title))</span>
     </label>
   </p>
   <p>
     <label>
       Description:
       <InputTextArea id="description" @bind-Value="Command.Description" />
+      <span class="validation-message">@GetError(nameof(CreateTodoTaskCommand.Description))</span>
     </label>
   </p>
   <p>
     <label>
       Due Date:
       <InputDate id="dueDate" @bind-Value="Command.DueDate" />
-      <ValidationMessage For="()=>Command.DueDate" />
+      <span class="validation-message">@GetError(nameof(CreateTodoTaskCommand.DueDate))</span>
     </label>
   </p>
   <button class="btn btn-primary" type="submit">Submit</button>
 </EditForm>
 
 @code {
+  [Inject]
+  private IValidator<CreateTodoTaskCommand> Validator { get; set; } = default!;
+
   private CreateTodoTaskCommand Command { get; set; } = new CreateTodoTaskCommand();
-  
+  private Dictionary<string, string> _errors = new();
+
   [Parameter]
   public EventCallback OnSubmitForm { get; set; }
 
-  private void OnSubmit()
-  {
-    OnSubmitForm.InvokeAsync(Command);
-  }
+  private string GetError(string field) =>
+    _errors.TryGetValue(field, out var message) ? message : string.Empty;
 
+  private async Task HandleSubmit()
+  {
+    _errors.Clear();
+    var result = await Validator.ValidateAsync(Command);
+    if (!result.IsValid)
+    {
+      foreach (var failure in result.Errors)
+      {
+        _errors[failure.PropertyName] = failure.ErrorMessage;
+      }
+
+      return;
+    }
+
+    await OnSubmitForm.InvokeAsync(Command);
+  }
 }

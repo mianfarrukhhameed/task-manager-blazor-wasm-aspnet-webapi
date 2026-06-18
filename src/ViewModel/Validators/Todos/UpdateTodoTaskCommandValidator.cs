@@ -9,7 +9,15 @@ public class UpdateTodoTaskCommandValidator : AbstractValidator<UpdateTodoTaskCo
     public UpdateTodoTaskCommandValidator()
     {
         RuleFor(x => x.ExternalId).NotEmpty();
-        RuleFor(x => x.Title).NotEmpty();
-        RuleFor(x => x.DueDate).NotEmpty().GreaterThan(DateTime.Now).WithMessage("Due Date should be future date");
+        RuleFor(x => x.Title)
+            .NotEmpty()
+            .MaximumLength(TodoFieldLimits.TitleMaxLength);
+        RuleFor(x => x.Description)
+            .NotEmpty()
+            .MaximumLength(TodoFieldLimits.DescriptionMaxLength);
+        RuleFor(x => x.DueDate)
+            .NotEmpty()
+            .GreaterThan(DateTime.Now)
+            .WithMessage("Due Date should be future date");
     }
 }
