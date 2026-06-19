@@ -63,6 +63,7 @@ public class ClaudeSettings
 public class AiFeaturesConfiguration
 {
     public bool EnableSummarization { get; set; } = true;
+    public AiRateLimitConfiguration SummarizeRateLimit { get; set; } = new();
     public bool EnableClassification { get; set; } = false;
     public bool EnableSemanticSearch { get; set; } = false;
     public bool EnableRag { get; set; } = false;

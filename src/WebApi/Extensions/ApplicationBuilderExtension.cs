@@ -38,6 +38,8 @@ namespace Fistix.TaskManager.WebApi.Extensions
       });
 
       app.UseAuthorization();
+
+      app.UseRateLimiter();
     }
   }
 }

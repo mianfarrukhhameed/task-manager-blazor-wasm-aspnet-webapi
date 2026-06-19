@@ -1,4 +1,5 @@
 using Fistix.TaskManager.Core.Exceptions;
+using Fistix.TaskManager.Core.SecurityModel;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using Fistix.TaskManager.WebApi.Extensions;
@@ -6,6 +7,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
@@ -34,9 +36,11 @@ public class AiController : ControllerBase
     /// Title and description are loaded from the database; only the task id and force flag are required.
     /// </summary>
     [HttpPost("summarize")]
+    [EnableRateLimiting(RateLimitPolicies.AiSummarize)]
     [ProducesResponseType(typeof(TaskSummaryDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<ActionResult<TaskSummaryDto>> Summarize([FromBody] SummarizeTodoTaskCommand command)
     {
