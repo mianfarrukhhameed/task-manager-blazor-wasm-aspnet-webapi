@@ -7,22 +7,18 @@ using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
 using System;
 using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
 using Fistix.TaskManager.Core.SecurityModel;
 using Fistix.TaskManager.WebApi.Filters;
-using Microsoft.ApplicationInsights.Extensibility;
-using Fistix.TaskManager.WebApi.Tracing;
 using System.Reflection;
 using System.IO;
+using System.Security.Claims;
 
 namespace Fistix.TaskManager.WebApi.Extensions
 {
   public static class ServiceCollectionExtension
   {
-    public static void AddCommonServices(this IServiceCollection services, MasterConfig masterConfig)
+    public static void AddCommonServices(this IServiceCollection services, MasterConfig masterConfig, bool isDevelopment)
     {
       string swaggerDescription = "";
       if (!string.IsNullOrEmpty(masterConfig.Auth0Config.AuthClientId))
@@ -35,6 +31,7 @@ namespace Fistix.TaskManager.WebApi.Extensions
       //services.AddSingleton<ITelemetryInitializer, TelemetryRequestResponse>();
 
       services.AddScoped<ICurrentUserService, CurrentUserService>();
+      services.AddScoped<IAccessTokenProvider, AccessTokenProvider>();
 
       services.AddCors(options =>
       {
@@ -92,21 +89,8 @@ namespace Fistix.TaskManager.WebApi.Extensions
           {
             options.Authority = masterConfig.Auth0Config.Authority;
             options.Audience = masterConfig.Auth0Config.Audience;
-            options.RequireHttpsMetadata = false;
-
-            options.Events = new JwtBearerEvents
-            {
-              OnTokenValidated = context =>
-                    {
-                      if (!(context.SecurityToken is JwtSecurityToken token)) return Task.CompletedTask;
-                      if (context.Principal.Identity is ClaimsIdentity identity)
-                      {
-                        identity.AddClaim(new Claim("access_token", token.RawData));
-                      }
-
-                      return Task.CompletedTask;
-                    }
-            };
+            options.RequireHttpsMetadata = !isDevelopment;
+            options.SaveToken = true;
           });
 
       services.AddAuthorization(options =>

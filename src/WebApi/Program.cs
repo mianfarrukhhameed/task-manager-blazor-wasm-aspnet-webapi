@@ -53,7 +53,7 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddServiceLayer(masterConfig);
-builder.Services.AddCommonServices(masterConfig);
+builder.Services.AddCommonServices(masterConfig, builder.Environment.IsDevelopment());
 builder.Services.AddAiServices();
 builder.Services.AddAiRateLimiting(builder.Configuration);
 

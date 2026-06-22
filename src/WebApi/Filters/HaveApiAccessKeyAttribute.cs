@@ -1,9 +1,9 @@
-﻿using Fistix.TaskManager.Core.Config;
+﻿using System;
+using System.Threading.Tasks;
+using Fistix.TaskManager.Core.Config;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Threading.Tasks;
 
 namespace Fistix.TaskManager.WebApi.Filters
 {
@@ -17,10 +17,11 @@ namespace Fistix.TaskManager.WebApi.Filters
       if (context.HttpContext.Request.Headers.TryGetValue("ApiAccessKey", out var extractedApiKey)
           && masterConfig.AppConfig.ApiAccessKey.Equals(extractedApiKey))
       {
-        await next();
+                await next();
+                return;
       }
 
-      context.Result = new UnauthorizedResult();
+            context.Result = new UnauthorizedResult();
       return;
     }
   }
