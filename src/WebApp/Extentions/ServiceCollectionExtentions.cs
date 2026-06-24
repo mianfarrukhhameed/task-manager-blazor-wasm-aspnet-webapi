@@ -1,10 +1,10 @@
-﻿using Fistix.TaskManager.WebApp.Models.Config;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Fistix.TaskManager.WebApp.Models.Config;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Fistix.TaskManager.WebApp.Extentions
 {
@@ -20,8 +20,31 @@ namespace Fistix.TaskManager.WebApp.Extentions
       {
         options.ProviderOptions.Authority = auth0Config.Authority;
         options.ProviderOptions.ClientId = auth0Config.ClientId;
-        options.ProviderOptions.ResponseType = "id_token token";
-        options.ProviderOptions.DefaultScopes.Add(auth0Config.Scope);
+        options.ProviderOptions.ResponseType = "code";
+        options.ProviderOptions.ResponseMode = "query";
+
+        // Ensure expected OpenID scopes are explicitly requested.
+        if (!options.ProviderOptions.DefaultScopes.Contains("openid"))
+          options.ProviderOptions.DefaultScopes.Add("openid");
+        if (!options.ProviderOptions.DefaultScopes.Contains("profile"))
+          options.ProviderOptions.DefaultScopes.Add("profile");
+        if (!options.ProviderOptions.DefaultScopes.Contains("email"))
+          options.ProviderOptions.DefaultScopes.Add("email");
+
+        // API identifier belongs in audience only — not in scope.
+        if (!string.IsNullOrWhiteSpace(auth0Config.Audience))
+          options.ProviderOptions.AdditionalProviderParameters["audience"] = auth0Config.Audience;
+
+        // Optional custom API permissions (e.g. "read:todos write:todos"), not the API identifier.
+        if (!string.IsNullOrWhiteSpace(auth0Config.Scope)
+            && !string.Equals(auth0Config.Scope, auth0Config.Audience, StringComparison.Ordinal))
+        {
+          foreach (var apiScope in auth0Config.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+          {
+            if (!options.ProviderOptions.DefaultScopes.Contains(apiScope))
+              options.ProviderOptions.DefaultScopes.Add(apiScope);
+          }
+        }
       });
     }
 

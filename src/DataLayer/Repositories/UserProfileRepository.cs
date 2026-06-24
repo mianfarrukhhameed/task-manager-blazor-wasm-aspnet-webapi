@@ -20,7 +20,9 @@ namespace Fistix.TaskManager.DataLayer.Repositories
 
     public async Task<UserProfile> GetByEmailAddress(string emailAddress)
     {
-      return await _context.UserProfiles.FirstOrDefaultAsync(x => x.EmailAddress == emailAddress);
+      var normalizedEmail = emailAddress.Trim().ToLowerInvariant();
+      return await _context.UserProfiles
+        .FirstOrDefaultAsync(x => x.EmailAddress.ToLower() == normalizedEmail);
     }
   }
 }
