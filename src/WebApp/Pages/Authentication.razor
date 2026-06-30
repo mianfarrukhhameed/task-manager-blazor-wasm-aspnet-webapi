@@ -2,10 +2,11 @@
 
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 
-<RemoteAuthenticatorView Action="@Action">
-    <LogOut>
-        @{
-            Navigation.NavigateTo($"{AuthConfig.Authority}v2/logout?client_id={AuthConfig.ClientId}&returnTo={Navigation.BaseUri}");
-        }
-    </LogOut>
-</RemoteAuthenticatorView>
+@if (IsLogoutAction)
+{
+    <p>Signing you out...</p>
+}
+else
+{
+    <RemoteAuthenticatorView Action="@Action" />
+}

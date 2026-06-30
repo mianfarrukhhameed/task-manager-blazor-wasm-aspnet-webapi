@@ -22,6 +22,38 @@
     <a class="dismiss">🗙</a>
   </div>
   <script src="_content/Microsoft.AspNetCore.Components.WebAssembly.Authentication/AuthenticationService.js"></script>
+  <script>
+    window.auth0Interop = {
+      clearOidcClientState: function () {
+        try {
+          const prefixes = ["oidc.", "Microsoft.AspNetCore.Components.WebAssembly.Authentication"];
+
+          const removeMatchingKeys = (storage) => {
+            if (!storage) return;
+
+            for (let i = storage.length - 1; i >= 0; i--) {
+              const key = storage.key(i);
+              if (!key) continue;
+              if (prefixes.some(prefix => key.startsWith(prefix))) {
+                storage.removeItem(key);
+              }
+            }
+          };
+
+          removeMatchingKeys(window.sessionStorage);
+          removeMatchingKeys(window.localStorage);
+        } catch (e) {
+          // Ignore cleanup failures; logout redirect should continue.
+        }
+      },
+      logout: function (authority, clientId, returnTo) {
+        window.auth0Interop.clearOidcClientState();
+        const url = authority + "/v2/logout?client_id=" + encodeURIComponent(clientId)
+          + "&returnTo=" + encodeURIComponent(returnTo);
+        window.location.replace(url);
+      }
+    };
+  </script>
   <script src="_framework/blazor.webassembly.js"></script>
   <script>navigator.serviceWorker.register('service-worker.js');</script>
 </body>

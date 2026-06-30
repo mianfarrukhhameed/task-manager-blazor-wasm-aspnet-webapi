@@ -22,16 +22,22 @@ namespace Fistix.TaskManager.WebApp
       var builder = WebAssemblyHostBuilder.CreateDefault(args);
       builder.RootComponents.Add<App>("#app");
 
-      ConfigureServices(builder.Services, builder.Configuration);
+      // AuthorizeView logs anonymous checks at Information; that is expected during login transitions.
+      builder.Logging.AddFilter("Microsoft.AspNetCore.Authorization", LogLevel.Warning);
+
+      ConfigureServices(builder.Services, builder.Configuration, builder.HostEnvironment.BaseAddress);
 
       await builder.Build().RunAsync();
     }
 
-    public static void ConfigureServices(IServiceCollection services, IConfigurationRoot configuration)
+    public static void ConfigureServices(
+      IServiceCollection services,
+      IConfigurationRoot configuration,
+      string baseAddress)
     {
       services.AddValidatorsFromAssemblyContaining<CreateTodoTaskCommandValidator>();
 
-      services.SetupAuth0Service(configuration);
+      services.SetupAuth0Service(configuration, baseAddress);
       services.SetupDefaultApiClient(configuration);
       //services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://localhost:5001") });
       

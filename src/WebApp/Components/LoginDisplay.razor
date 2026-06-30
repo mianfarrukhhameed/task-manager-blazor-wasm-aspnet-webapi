@@ -1,22 +1,37 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Fistix.TaskManager.WebApp.Models.Config
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject NavigationManager Navigation
+@inject Auth0Config AuthConfig
+@inject IJSRuntime JSRuntime
 
 <AuthorizeView>
+  <Authorizing>
+    <span class="text-muted">Checking sign-in...</span>
+  </Authorizing>
   <Authorized>
-    Hello, @context.User.Identity.Name!
+    Hello, @context.User.Identity?.Name!
     <button class="nav-link btn btn-link" @onclick="BeginSignOut">
       Log out
     </button>
   </Authorized>
   <NotAuthorized>
-    <a href="authentication/login">Log in</a>
+    <a href="authentication/login" @onclick="BeginLogin" @onclick:preventDefault="true">Log in</a>
   </NotAuthorized>
 </AuthorizeView>
 
 @code {
+  private void BeginLogin(MouseEventArgs args)
+  {
+    Navigation.NavigateToLogin("authentication/login");
+  }
+
   private async Task BeginSignOut(MouseEventArgs args)
   {
-    Navigation.NavigateTo("authentication/logout");
+    await JSRuntime.InvokeVoidAsync(
+      "auth0Interop.logout",
+      AuthConfig.Authority.TrimEnd('/'),
+      AuthConfig.ClientId,
+      Navigation.BaseUri);
   }
 }

@@ -10,11 +10,17 @@ namespace Fistix.TaskManager.WebApp.Extentions
 {
   public static class ServiceCollectionExtentions
   {
-    public static void SetupAuth0Service(this IServiceCollection services, IConfigurationRoot configurationRoot)
+    public static void SetupAuth0Service(
+      this IServiceCollection services,
+      IConfigurationRoot configurationRoot,
+      string baseAddress)
     {
       Auth0Config auth0Config = configurationRoot.GetSection("Auth0").Get<Auth0Config>();
 
       services.AddSingleton(auth0Config);
+
+      var normalizedBase = baseAddress.EndsWith('/') ? baseAddress : $"{baseAddress}/";
+      var logoutCallback = normalizedBase;
 
       services.AddOidcAuthentication(options =>
       {
@@ -22,6 +28,8 @@ namespace Fistix.TaskManager.WebApp.Extentions
         options.ProviderOptions.ClientId = auth0Config.ClientId;
         options.ProviderOptions.ResponseType = "code";
         options.ProviderOptions.ResponseMode = "query";
+        options.ProviderOptions.RedirectUri = $"{normalizedBase}authentication/login-callback";
+        options.ProviderOptions.PostLogoutRedirectUri = logoutCallback;
 
         // Ensure expected OpenID scopes are explicitly requested.
         if (!options.ProviderOptions.DefaultScopes.Contains("openid"))
