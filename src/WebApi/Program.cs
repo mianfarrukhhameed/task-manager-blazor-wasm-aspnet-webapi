@@ -69,10 +69,15 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
+app.UseSecurityHeaders();
 app.UseRouting();
-app.UseCommonService(masterConfig);
+app.UseCommonService(masterConfig, app.Environment);
 
 app.MapControllers();
 

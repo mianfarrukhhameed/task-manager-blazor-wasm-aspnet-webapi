@@ -2,6 +2,8 @@
 using Fistix.TaskManager.Core.Config;
 using Fistix.TaskManager.Core.SecurityModel;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using System.Linq;
 using System.Security.Claims;
 
@@ -9,14 +11,20 @@ namespace Fistix.TaskManager.WebApi.Extensions
 {
   public static class ApplicationBuilderExtension
   {
-    public static void UseCommonService(this IApplicationBuilder app, MasterConfig masterConfig)
+    public static void UseCommonService(
+      this IApplicationBuilder app,
+      MasterConfig masterConfig,
+      IWebHostEnvironment environment)
     {
-      app.UseSwagger();
-
-      app.UseSwaggerUI(x =>
+      if (environment.IsDevelopment())
       {
-        x.SwaggerEndpoint($"/swagger/{masterConfig.Swagger.ApiVersion}/swagger.json", $"{masterConfig.Swagger.Title} {masterConfig.Swagger.ApiVersion}");
-      });
+        app.UseSwagger();
+
+        app.UseSwaggerUI(x =>
+        {
+          x.SwaggerEndpoint($"/swagger/{masterConfig.Swagger.ApiVersion}/swagger.json", $"{masterConfig.Swagger.Title} {masterConfig.Swagger.ApiVersion}");
+        });
+      }
 
       app.UseAuthentication();
 
