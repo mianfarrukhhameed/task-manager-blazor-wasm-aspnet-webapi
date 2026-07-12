@@ -1,5 +1,6 @@
 using Fistix.TaskManager.ViewModel.Validators.Todos;
 using Fistix.TaskManager.WebApp.Extentions;
+using Fistix.TaskManager.WebApp.Services;
 using Fistix.TaskManager.WebApp.Services.DataServices;
 using Fistix.TaskManager.WebApp.Services.StateServices;
 using FluentValidation;
@@ -43,6 +44,7 @@ namespace Fistix.TaskManager.WebApp
       
       services.AddScoped<TodoDataService>();
       services.AddScoped<TodoStateService>();
+      services.AddScoped<ClassificationHubService>();
     }
   }
 }

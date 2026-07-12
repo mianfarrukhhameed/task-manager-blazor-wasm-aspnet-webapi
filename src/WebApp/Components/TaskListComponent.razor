@@ -66,9 +66,10 @@
         </div>
         <div class="modal-body">
           <TaskDetailsComponent
-            Task="SelectedTask"
+            TodoItem="SelectedTask"
             OnEdit="EditTask"
-            OnClose="CloseTaskDetails">
+            OnClose="CloseTaskDetails"
+            OnTaskUpdated="HandleTaskUpdated">
           </TaskDetailsComponent>
         </div>
       </div>
@@ -122,6 +123,12 @@
   private void CloseTaskDetails()
   {
     SelectedTask = null;
+  }
+
+  private void HandleTaskUpdated(TodoTaskDto updatedTask)
+  {
+    SelectedTask = updatedTask;
+    TodoStateService.ReplaceTask(updatedTask);
   }
 
   private void EditTask()

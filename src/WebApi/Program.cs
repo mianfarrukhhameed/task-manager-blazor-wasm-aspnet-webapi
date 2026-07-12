@@ -5,6 +5,7 @@ using Fistix.TaskManager.DataLayer;
 using Fistix.TaskManager.ServiceLayer;
 using Fistix.TaskManager.ViewModel.Validators.Todos;
 using Fistix.TaskManager.WebApi.Extensions;
+using Fistix.TaskManager.WebApi.Hubs;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -55,6 +56,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddServiceLayer(masterConfig);
 builder.Services.AddCommonServices(masterConfig, builder.Environment.IsDevelopment());
 builder.Services.AddAiServices();
+builder.Services.AddClassificationSignalR();
 builder.Services.AddAiRateLimiting(builder.Configuration);
 
 var app = builder.Build();
@@ -80,5 +82,6 @@ app.UseRouting();
 app.UseCommonService(masterConfig, app.Environment);
 
 app.MapControllers();
+app.MapHub<ClassificationHub>(ClassificationHub.HubPath);
 
 await app.RunAsync();

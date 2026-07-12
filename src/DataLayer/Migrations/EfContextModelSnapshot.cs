@@ -36,6 +36,12 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                     b.Property<string>("AiPriority")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("AiPriorityModel")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AiPriorityReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("AiSummary")
                         .HasColumnType("nvarchar(max)");
 
@@ -43,6 +49,9 @@ namespace Fistix.TaskManager.DataLayer.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("AiType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ClassificationStatus")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<float?>("ConfidenceScore")
@@ -56,6 +65,9 @@ namespace Fistix.TaskManager.DataLayer.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool?>("WasOverridden")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 

@@ -43,14 +43,13 @@ public class GoogleAISettings
     // Optional path to a service account JSON file when using Vertex/GenAI with service-account credentials
     public string ServiceAccountJsonPath { get; set; } = "";
 
-    // Model id (e.g. gemini-2.0-flash, gemini-1.5-flash-002)
-    public string Model { get; set; } = "gemini-2.0-flash";
+    public string Model { get; set; } = "";
 
     // V1 or V1_Beta — most Gemini chat models require V1_Beta
-    public string ApiVersion { get; set; } = "V1_Beta";
+    public string ApiVersion { get; set; } = "";
 
     // Used when the primary model returns transient errors (503/429)
-    public string[] FallbackModels { get; set; } = ["gemini-2.0-flash", "gemini-1.5-flash-002"];
+    public string[] FallbackModels { get; set; } = [];
 }
 
 public class ClaudeSettings
@@ -65,6 +64,8 @@ public class AiFeaturesConfiguration
     public bool EnableSummarization { get; set; } = true;
     public AiRateLimitConfiguration SummarizeRateLimit { get; set; } = new();
     public bool EnableClassification { get; set; } = false;
+    public AiRateLimitConfiguration ClassifyRateLimit { get; set; } = new();
+    public ClassificationConfiguration Classification { get; set; } = new();
     public bool EnableSemanticSearch { get; set; } = false;
     public bool EnableRag { get; set; } = false;
     public bool EnableFunctionCalling { get; set; } = false;

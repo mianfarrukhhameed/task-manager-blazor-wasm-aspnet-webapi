@@ -31,6 +31,7 @@ public static class AiServiceExtension
 
         services.AddSingleton<ILlmProviderService, SemanticKernelLlmProvider>();
         services.AddScoped<SummarizationPipeline>();
+        services.AddScoped<ClassificationPipeline>();
 
         return services;
     }

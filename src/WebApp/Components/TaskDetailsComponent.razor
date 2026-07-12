@@ -1,31 +1,30 @@
 @using Fistix.TaskManager.ViewModel.Dtos
+@using Fistix.TaskManager.WebApp.Services
 @using Fistix.TaskManager.WebApp.Services.DataServices
 @using Microsoft.Extensions.Logging
+@implements IAsyncDisposable
 
 <div class="task-details card">
     <div class="card-header">
-        <h3>@Task.Title</h3>
+        <h3>@TodoItem.Title</h3>
     </div>
     <div class="card-body">
-        <!-- Task Information -->
         <div class="row mb-3">
             <div class="col-md-6">
-                <p><strong>Status:</strong> <span class="badge bg-info">@Task.Status</span></p>
-                <p><strong>Priority:</strong> <span class="badge bg-warning">@Task.Priority</span></p>
+                <p><strong>Status:</strong> <span class="badge bg-info">@TodoItem.Status</span></p>
+                <p><strong>Priority:</strong> <span class="badge bg-warning">@TodoItem.Priority</span></p>
             </div>
             <div class="col-md-6">
-                <p><strong>Due Date:</strong> @(Task.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")</p>
-                <p><strong>Assigned To:</strong> @(Task.AssignedTo ?? "Unassigned")</p>
+                <p><strong>Due Date:</strong> @(TodoItem.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")</p>
+                <p><strong>Assigned To:</strong> @(TodoItem.AssignedTo ?? "Unassigned")</p>
             </div>
         </div>
 
-        <!-- Description -->
         <div class="mb-3">
             <h5>Description</h5>
-            <p>@Task.Description</p>
+            <p>@TodoItem.Description</p>
         </div>
 
-        <!-- AI Summary Section -->
         <div class="ai-summary-section border rounded p-3 mb-3" style="background-color: #f8f9fa;">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h5 class="mb-0">
@@ -35,7 +34,7 @@
                     @if (!string.IsNullOrEmpty(Summary) && !IsLoading)
                     {
                         <button class="btn btn-sm btn-outline-primary" @onclick="RegenerateSummary" title="Regenerate summary">
-                            🔄 Refresh
+                            Refresh
                         </button>
                     }
                 </div>
@@ -51,7 +50,7 @@
             else if (!string.IsNullOrEmpty(ErrorMessage))
             {
                 <div class="alert alert-warning mb-0">
-                    <strong>⚠️ Could not generate summary:</strong> @ErrorMessage
+                    <strong>Could not generate summary:</strong> @ErrorMessage
                     <button class="btn btn-sm btn-outline-warning ms-2" @onclick="GenerateSummary">Try Again</button>
                 </div>
             }
@@ -72,7 +71,65 @@
             }
         </div>
 
-        <!-- Action Buttons -->
+        <div class="ai-priority-section border rounded p-3 mb-3" style="background-color: #f8f9fa;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">
+                    <span class="badge bg-primary">AI</span> Priority Suggestion
+                </h5>
+                @if (Classification?.Status == "Failed")
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="RetryClassification">Try Again</button>
+                }
+            </div>
+
+            @if (IsClassifying)
+            {
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="ms-2">Analyzing priority...</span>
+            }
+            else if (!string.IsNullOrEmpty(ClassificationError))
+            {
+                <div class="alert alert-warning mb-0">
+                    <strong>Could not classify priority:</strong> @ClassificationError
+                </div>
+            }
+            else if (Classification?.Status == "Completed" && !string.IsNullOrWhiteSpace(Classification.SuggestedPriority))
+            {
+                <p class="mb-2">
+                    Suggested:
+                    <span class="badge @GetPriorityBadgeClass(Classification.SuggestedPriority)">@Classification.SuggestedPriority</span>
+                    @if (Classification.Confidence.HasValue)
+                    {
+                        <span class="text-muted">(@(Math.Round(Classification.Confidence.Value * 100))% confidence)</span>
+                    }
+                </p>
+                @if (!string.IsNullOrWhiteSpace(Classification.Reason))
+                {
+                    <p class="mb-2 text-muted">@Classification.Reason</p>
+                }
+                @if (ShouldShowApplyButton())
+                {
+                    <button class="btn btn-sm btn-primary" @onclick="ApplySuggestedPriority" disabled="@IsApplyingPriority">
+                        Apply @Classification.SuggestedPriority
+                    </button>
+                }
+                else if (Classification.Confidence is >= 0.60f and < 0.85f)
+                {
+                    <small class="text-muted">Recommended — review before applying.</small>
+                }
+            }
+            else if (Classification?.Status == "Pending")
+            {
+                <p class="text-muted mb-0">Priority analysis is in progress...</p>
+            }
+            else
+            {
+                <p class="text-muted mb-0">No AI priority suggestion available yet.</p>
+            }
+        </div>
+
         <div>
             <button class="btn btn-primary" @onclick="HandleEdit">Edit</button>
             <button class="btn btn-secondary" @onclick="HandleClose">Close</button>
@@ -88,8 +145,14 @@
     private string? ErrorMessage { get; set; }
     private bool IsLoading { get; set; }
 
+    private TaskClassificationDto? Classification { get; set; }
+    private string? ClassificationError { get; set; }
+    private bool IsClassifying { get; set; }
+    private bool IsApplyingPriority { get; set; }
+    private Guid _initializedTodoId;
+
     [Parameter]
-    public TodoTaskDto Task { get; set; } = new();
+    public TodoTaskDto TodoItem { get; set; } = new();
 
     [Parameter]
     public EventCallback OnEdit { get; set; }
@@ -97,52 +160,251 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    [Parameter]
+    public EventCallback<TodoTaskDto> OnTaskUpdated { get; set; }
+
     [Inject]
     public TodoDataService TodoDataService { get; set; } = default!;
 
     [Inject]
+    public ClassificationHubService ClassificationHubService { get; set; } = default!;
+
+    [Inject]
     public ILogger<TaskDetailsComponent> Logger { get; set; } = default!;
 
-    protected override void OnParametersSet()
+    protected override async System.Threading.Tasks.Task OnParametersSetAsync()
     {
-        LoadSummaryFromTask();
+        LoadSummaryFromTodoItem();
+
+        if (TodoItem.ExternalId == Guid.Empty || TodoItem.ExternalId == _initializedTodoId)
+        {
+            return;
+        }
+
+        _initializedTodoId = TodoItem.ExternalId;
+        LoadClassificationFromTodoItem();
+        ClassificationHubService.ClassificationUpdated -= OnClassificationPushed;
+        ClassificationHubService.ClassificationUpdated += OnClassificationPushed;
+        await ClassificationHubService.SubscribeToTodoAsync(TodoItem.ExternalId);
+        await LoadClassificationStatusAsync();
     }
 
-    private void LoadSummaryFromTask()
+    public async ValueTask DisposeAsync()
     {
-        if (!string.IsNullOrWhiteSpace(Task.AiSummary))
+        ClassificationHubService.ClassificationUpdated -= OnClassificationPushed;
+
+        if (_initializedTodoId != Guid.Empty)
         {
-            Summary = Task.AiSummary;
-            SummaryModel = Task.AiSummaryModel;
-            SummaryGeneratedAt = Task.AiSummaryGeneratedAt;
+            await ClassificationHubService.LeaveTodoAsync(_initializedTodoId);
+        }
+    }
+
+    private void OnClassificationPushed(TaskClassificationDto dto)
+    {
+        if (dto.TodoExternalId != TodoItem.ExternalId)
+        {
+            return;
+        }
+
+        Classification = dto;
+        SyncClassificationToTodoItem();
+        IsClassifying = dto.Status == "Pending";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void LoadSummaryFromTodoItem()
+    {
+        if (!string.IsNullOrWhiteSpace(TodoItem.AiSummary))
+        {
+            Summary = TodoItem.AiSummary;
+            SummaryModel = TodoItem.AiSummaryModel;
+            SummaryGeneratedAt = TodoItem.AiSummaryGeneratedAt;
             FromCache = true;
             ErrorMessage = null;
         }
     }
 
-    private async Task HandleEdit()
+    private void LoadClassificationFromTodoItem()
+    {
+        if (!string.IsNullOrWhiteSpace(TodoItem.ClassificationStatus))
+        {
+            Classification = new TaskClassificationDto
+            {
+                TodoExternalId = TodoItem.ExternalId,
+                SuggestedPriority = TodoItem.AiSuggestedPriority,
+                Confidence = TodoItem.AiPriorityConfidence,
+                Reason = TodoItem.AiPriorityReason,
+                Status = TodoItem.ClassificationStatus,
+                Model = TodoItem.AiPriorityModel,
+                FromCache = true,
+                GeneratedAt = TodoItem.AiPriorityGeneratedAt
+            };
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadClassificationStatusAsync()
+    {
+        if (TodoItem.ExternalId == Guid.Empty)
+        {
+            return;
+        }
+
+        IsClassifying = Classification?.Status == "Pending" || Classification is null;
+        ClassificationError = null;
+
+        try
+        {
+            var result = await TodoDataService.GetClassification(TodoItem.ExternalId);
+            if (result.IsSucceed && result.Payload is not null)
+            {
+                Classification = result.Payload;
+                SyncClassificationToTodoItem();
+            }
+            else
+            {
+                ClassificationError = result.Message ?? "Failed to load classification status";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading classification status");
+            ClassificationError = "Network error or API unavailable";
+        }
+        finally
+        {
+            IsClassifying = Classification?.Status == "Pending";
+        }
+    }
+
+    private async System.Threading.Tasks.Task RetryClassification()
+    {
+        IsClassifying = true;
+        ClassificationError = null;
+
+        try
+        {
+            var result = await TodoDataService.Classify(TodoItem.ExternalId, force: true);
+            if (result.IsSucceed && result.Payload is not null)
+            {
+                Classification = result.Payload;
+                SyncClassificationToTodoItem();
+            }
+            else
+            {
+                ClassificationError = result.Message ?? "Failed to retry classification";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error retrying classification");
+            ClassificationError = "Network error or API unavailable";
+        }
+        finally
+        {
+            IsClassifying = Classification?.Status == "Pending";
+        }
+    }
+
+    private bool ShouldShowApplyButton()
+    {
+        if (Classification?.Status != "Completed" || string.IsNullOrWhiteSpace(Classification.SuggestedPriority))
+        {
+            return false;
+        }
+
+        if (Classification.Confidence is < 0.60f)
+        {
+            return false;
+        }
+
+        return !string.Equals(
+            NormalizePriority(TodoItem.Priority),
+            Classification.SuggestedPriority,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async System.Threading.Tasks.Task ApplySuggestedPriority()
+    {
+        IsApplyingPriority = true;
+        try
+        {
+            var result = await TodoDataService.ApplyAiPriority(TodoItem.ExternalId);
+            if (result.IsSucceed && result.Payload is not null)
+            {
+                TodoItem.Priority = result.Payload.Priority;
+                await OnTaskUpdated.InvokeAsync(result.Payload);
+            }
+            else
+            {
+                ClassificationError = result.Message ?? "Failed to apply AI priority";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error applying AI priority");
+            ClassificationError = "Network error or API unavailable";
+        }
+        finally
+        {
+            IsApplyingPriority = false;
+        }
+    }
+
+    private void SyncClassificationToTodoItem()
+    {
+        if (Classification is null)
+        {
+            return;
+        }
+
+        TodoItem.AiSuggestedPriority = Classification.SuggestedPriority;
+        TodoItem.AiPriorityConfidence = Classification.Confidence;
+        TodoItem.AiPriorityReason = Classification.Reason;
+        TodoItem.ClassificationStatus = Classification.Status;
+        TodoItem.AiPriorityModel = Classification.Model;
+        TodoItem.AiPriorityGeneratedAt = Classification.GeneratedAt;
+    }
+
+    private static string NormalizePriority(string? priority) =>
+        priority?.Trim().ToUpperInvariant() switch
+        {
+            "HIGH" => "HIGH",
+            "LOW" => "LOW",
+            "MEDIUM" => "MEDIUM",
+            _ => priority?.ToUpperInvariant() ?? string.Empty
+        };
+
+    private static string GetPriorityBadgeClass(string? priority) => priority?.ToUpperInvariant() switch
+    {
+        "HIGH" => "bg-danger",
+        "MEDIUM" => "bg-warning text-dark",
+        "LOW" => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    private async System.Threading.Tasks.Task HandleEdit()
     {
         await OnEdit.InvokeAsync();
     }
 
-    private async Task HandleClose()
+    private async System.Threading.Tasks.Task HandleClose()
     {
         await OnClose.InvokeAsync();
     }
 
-    private async Task GenerateSummary()
+    private async System.Threading.Tasks.Task GenerateSummary()
     {
         await GenerateSummaryInternal(force: false);
     }
 
-    private async Task RegenerateSummary()
+    private async System.Threading.Tasks.Task RegenerateSummary()
     {
         await GenerateSummaryInternal(force: true);
     }
 
-    private async Task GenerateSummaryInternal(bool force)
+    private async System.Threading.Tasks.Task GenerateSummaryInternal(bool force)
     {
-        if (Task == null || Task.ExternalId == Guid.Empty)
+        if (TodoItem.ExternalId == Guid.Empty)
         {
             ErrorMessage = "Invalid task";
             return;
@@ -158,7 +420,7 @@
 
         try
         {
-            var result = await TodoDataService.Summarize(Task.ExternalId, force);
+            var result = await TodoDataService.Summarize(TodoItem.ExternalId, force);
 
             if (result.IsSucceed && result.Payload != null)
             {
@@ -168,9 +430,9 @@
                 FromCache = result.Payload.FromCache;
                 ErrorMessage = null;
 
-                Task.AiSummary = result.Payload.Summary;
-                Task.AiSummaryModel = result.Payload.Model;
-                Task.AiSummaryGeneratedAt = result.Payload.GeneratedAt;
+                TodoItem.AiSummary = result.Payload.Summary;
+                TodoItem.AiSummaryModel = result.Payload.Model;
+                TodoItem.AiSummaryGeneratedAt = result.Payload.GeneratedAt;
             }
             else
             {
@@ -193,6 +455,10 @@
 <style>
     .ai-summary-section {
         border-left: 4px solid #28a745 !important;
+    }
+
+    .ai-priority-section {
+        border-left: 4px solid #0d6efd !important;
     }
 
     .task-details {

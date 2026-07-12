@@ -2,6 +2,7 @@ using Fistix.TaskManager.Core.Exceptions;
 using Fistix.TaskManager.Core.SecurityModel;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
+using Fistix.TaskManager.ViewModel.Queries.Todos;
 using Fistix.TaskManager.WebApi.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -79,6 +80,120 @@ public class AiController : ControllerBase
         {
             _logger.LogError(ex, "Error generating summary for todo {TodoExternalId}", command.TodoExternalId);
             return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to generate summary");
+        }
+    }
+
+    /// <summary>
+    /// Reads current classification status from stored metadata (no LLM call).
+    /// </summary>
+    [HttpGet("classify/{todoExternalId:guid}")]
+    [ProducesResponseType(typeof(TaskClassificationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TaskClassificationDto>> GetClassification(Guid todoExternalId)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetTaskClassificationQuery { TodoExternalId = todoExternalId });
+            return Ok(result.Payload);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    /// <summary>
+    /// Runs or retries AI classification (rate-limited). Use GET for status polling.
+    /// </summary>
+    [HttpPost("classify")]
+    [EnableRateLimiting(RateLimitPolicies.AiClassify)]
+    [ProducesResponseType(typeof(TaskClassificationDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<TaskClassificationDto>> Classify([FromBody] ClassifyTodoTaskCommand command)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            _logger.LogDebug("Classification retry for todo {TodoExternalId}, force={Force}",
+                command.TodoExternalId, command.Force);
+
+            var result = await _mediator.Send(command);
+            return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            _logger.LogWarning(ex, "Classification feature disabled for todo {TodoExternalId}", command.TodoExternalId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI classification is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid classification request for todo {TodoExternalId}", command.TodoExternalId);
+            return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error classifying todo {TodoExternalId}", command.TodoExternalId);
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to classify task priority");
+        }
+    }
+
+    /// <summary>
+    /// Applies the AI-suggested priority to the task.
+    /// </summary>
+    [HttpPost("apply-priority")]
+    [ProducesResponseType(typeof(TodoTaskDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<TodoTaskDto>> ApplyPriority([FromBody] ApplyAiPriorityCommand command)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI classification is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error applying AI priority for todo {TodoExternalId}", command.TodoExternalId);
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to apply AI priority");
         }
     }
 }

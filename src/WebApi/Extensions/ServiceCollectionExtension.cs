@@ -13,6 +13,7 @@ using Fistix.TaskManager.WebApi.Filters;
 using System.Reflection;
 using System.IO;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace Fistix.TaskManager.WebApi.Extensions
 {
@@ -91,6 +92,20 @@ namespace Fistix.TaskManager.WebApi.Extensions
             options.Audience = masterConfig.Auth0Config.Audience;
             options.RequireHttpsMetadata = !isDevelopment;
             options.SaveToken = true;
+            options.Events = new JwtBearerEvents
+            {
+              OnMessageReceived = context =>
+              {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/classification"))
+                {
+                  context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+              }
+            };
           });
 
       services.AddAuthorization(options =>

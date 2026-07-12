@@ -90,5 +90,14 @@ namespace Fistix.TaskManager.WebApp.Services.StateServices
         Message = apiCallResult.Message
       });
     }
+
+    public void ReplaceTask(TodoTaskDto updatedTask)
+    {
+      var tasks = _todoSubject.Value
+        .Select(t => t.ExternalId == updatedTask.ExternalId ? updatedTask : t)
+        .ToList();
+
+      _todoSubject.OnNext(tasks);
+    }
   }
 }

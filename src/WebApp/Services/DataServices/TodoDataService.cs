@@ -88,5 +88,68 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<TaskClassificationDto>> GetClassification(Guid todoExternalId)
+    {
+      var result = new ApiCallResult<TaskClassificationDto>();
+      var response = await _httpClient.GetAsync($"api/ai/classify/{todoExternalId}");
+
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<TaskClassificationDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
+
+    public async Task<ApiCallResult<TaskClassificationDto>> Classify(Guid todoExternalId, bool force = false)
+    {
+      var result = new ApiCallResult<TaskClassificationDto>();
+      var command = new ClassifyTodoTaskCommand
+      {
+        TodoExternalId = todoExternalId,
+        Force = force
+      };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/classify", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<TaskClassificationDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
+
+    public async Task<ApiCallResult<TodoTaskDto>> ApplyAiPriority(Guid todoExternalId)
+    {
+      var result = new ApiCallResult<TodoTaskDto>();
+      var command = new ApplyAiPriorityCommand { TodoExternalId = todoExternalId };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/apply-priority", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<TodoTaskDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }

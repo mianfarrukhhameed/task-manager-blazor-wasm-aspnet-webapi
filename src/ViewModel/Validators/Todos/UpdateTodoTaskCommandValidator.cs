@@ -19,5 +19,9 @@ public class UpdateTodoTaskCommandValidator : AbstractValidator<UpdateTodoTaskCo
             .NotEmpty()
             .GreaterThan(DateTime.Now)
             .WithMessage("Due Date should be future date");
+        RuleFor(x => x.Priority)
+            .NotEmpty()
+            .Must(p => p is "High" or "Medium" or "Low")
+            .WithMessage("Priority must be High, Medium, or Low");
     }
 }

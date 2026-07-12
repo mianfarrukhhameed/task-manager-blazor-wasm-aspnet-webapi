@@ -18,7 +18,6 @@ public static class RateLimitingServiceExtension
     {
         var aiConfig = new AiConfiguration();
         configuration.GetSection("Ai").Bind(aiConfig);
-        var rateLimit = aiConfig.Features.SummarizeRateLimit;
 
         services.AddRateLimiter(options =>
         {
@@ -37,38 +36,47 @@ public static class RateLimitingServiceExtension
                 await httpContext.Response.WriteAsJsonAsync(new ProblemDetails
                 {
                     Title = "Too many requests",
-                    Detail = "AI summarization rate limit exceeded. Please try again later.",
+                    Detail = "AI rate limit exceeded. Please try again later.",
                     Status = StatusCodes.Status429TooManyRequests
                 }, cancellationToken);
             };
 
-            if (!rateLimit.Enabled)
-            {
-                options.AddPolicy(RateLimitPolicies.AiSummarize, _ =>
-                    RateLimitPartition.GetNoLimiter(RateLimitPolicies.AiSummarize));
-                return;
-            }
-
-            var permitLimit = Math.Max(1, rateLimit.PermitLimit);
-            var window = TimeSpan.FromMinutes(Math.Max(1, rateLimit.WindowMinutes));
-
-            options.AddPolicy(RateLimitPolicies.AiSummarize, httpContext =>
-            {
-                var partitionKey = httpContext.User?.FindFirstValue("sub")
-                    ?? httpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier)
-                    ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                    ?? "anonymous";
-
-                return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = permitLimit,
-                    Window = window,
-                    QueueLimit = 0,
-                    AutoReplenishment = true
-                });
-            });
+            AddFixedWindowPolicy(options, RateLimitPolicies.AiSummarize, aiConfig.Features.SummarizeRateLimit);
+            AddFixedWindowPolicy(options, RateLimitPolicies.AiClassify, aiConfig.Features.ClassifyRateLimit);
         });
 
         return services;
+    }
+
+    private static void AddFixedWindowPolicy(
+        RateLimiterOptions options,
+        string policyName,
+        AiRateLimitConfiguration rateLimit)
+    {
+        if (!rateLimit.Enabled)
+        {
+            options.AddPolicy(policyName, _ =>
+                RateLimitPartition.GetNoLimiter(policyName));
+            return;
+        }
+
+        var permitLimit = Math.Max(1, rateLimit.PermitLimit);
+        var window = TimeSpan.FromMinutes(Math.Max(1, rateLimit.WindowMinutes));
+
+        options.AddPolicy(policyName, httpContext =>
+        {
+            var partitionKey = httpContext.User?.FindFirstValue("sub")
+                ?? httpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "anonymous";
+
+            return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = window,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+        });
     }
 }

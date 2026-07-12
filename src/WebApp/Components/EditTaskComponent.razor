@@ -26,6 +26,32 @@
       <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.DueDate))</span>
     </label>
   </p>
+  <p>
+    <label>
+      Priority:
+      <InputSelect id="edit-priority" @bind-Value="Command.Priority" class="form-select">
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </InputSelect>
+      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.Priority))</span>
+    </label>
+  </p>
+  @if (!string.IsNullOrWhiteSpace(Task.AiSuggestedPriority)
+       && string.Equals(Task.ClassificationStatus, "Completed", StringComparison.OrdinalIgnoreCase))
+  {
+    <p class="text-muted small">
+      AI suggested:
+      <strong>@NormalizeDisplayPriority(Task.AiSuggestedPriority)</strong>
+      @if (Task.AiPriorityConfidence.HasValue)
+      {
+        <span>(@(Math.Round(Task.AiPriorityConfidence.Value * 100))%)</span>
+      }
+      <button type="button" class="btn btn-link btn-sm p-0 ms-1" @onclick="ApplySuggestedPriority">
+        Use suggestion
+      </button>
+    </p>
+  }
   <button class="btn btn-primary" type="submit">Save</button>
   <button class="btn btn-secondary ms-2" type="button" @onclick="HandleCancel">Cancel</button>
 </EditForm>
@@ -53,13 +79,28 @@
             ExternalId = Task.ExternalId,
             Title = Task.Title ?? string.Empty,
             Description = Task.Description ?? string.Empty,
-            DueDate = Task.DueDate ?? DateTime.Today.AddDays(1)
+            DueDate = Task.DueDate ?? DateTime.Today.AddDays(1),
+            Priority = NormalizeDisplayPriority(Task.Priority)
         };
         _errors.Clear();
     }
 
     private string GetError(string field) =>
         _errors.TryGetValue(field, out var message) ? message : string.Empty;
+
+    private void ApplySuggestedPriority()
+    {
+        Command.Priority = NormalizeDisplayPriority(Task.AiSuggestedPriority);
+    }
+
+    private static string NormalizeDisplayPriority(string? priority) =>
+        priority?.Trim().ToUpperInvariant() switch
+        {
+            "HIGH" => "High",
+            "LOW" => "Low",
+            "MEDIUM" => "Medium",
+            _ => "Medium"
+        };
 
     private async Task HandleSubmit()
     {

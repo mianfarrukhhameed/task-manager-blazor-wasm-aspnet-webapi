@@ -39,4 +39,38 @@ public class UpdateTodoTaskCommandValidatorTests
 
         result.ShouldHaveValidationErrorFor(x => x.Description);
     }
+
+    [Fact]
+    public void Should_fail_when_priority_is_invalid()
+    {
+        var command = new UpdateTodoTaskCommand
+        {
+            ExternalId = Guid.NewGuid(),
+            Title = "Valid title",
+            Description = "Valid description",
+            DueDate = DateTime.UtcNow.AddDays(1),
+            Priority = "Urgent"
+        };
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldHaveValidationErrorFor(x => x.Priority);
+    }
+
+    [Fact]
+    public void Should_pass_when_priority_is_valid()
+    {
+        var command = new UpdateTodoTaskCommand
+        {
+            ExternalId = Guid.NewGuid(),
+            Title = "Valid title",
+            Description = "Valid description",
+            DueDate = DateTime.UtcNow.AddDays(1),
+            Priority = "High"
+        };
+
+        var result = _validator.TestValidate(command);
+
+        result.ShouldNotHaveValidationErrorFor(x => x.Priority);
+    }
 }
