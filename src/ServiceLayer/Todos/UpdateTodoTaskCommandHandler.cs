@@ -3,9 +3,11 @@ using Fistix.TaskManager.AiLayer.Shared;
 using Fistix.TaskManager.Core.Abstractions.Repositories;
 using Fistix.TaskManager.Core.Abstractions.Services;
 using Fistix.TaskManager.Core.SecurityModel;
+using Fistix.TaskManager.ServiceLayer.Background;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,17 +19,26 @@ public class UpdateTodoTaskCommandHandler : IRequestHandler<UpdateTodoTaskComman
     private readonly ITodoTaskRepository _todoTaskRepository;
     private readonly ITodoAiMetadataRepository _todoAiMetadataRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IEmbeddingQueue _embeddingQueue;
+    private readonly AiConfiguration _aiConfig;
+    private readonly ILogger<UpdateTodoTaskCommandHandler> _logger;
 
     public UpdateTodoTaskCommandHandler(
         IMapper mapper,
         ITodoTaskRepository todoTaskRepository,
         ITodoAiMetadataRepository todoAiMetadataRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IEmbeddingQueue embeddingQueue,
+        AiConfiguration aiConfig,
+        ILogger<UpdateTodoTaskCommandHandler> logger)
     {
         _mapper = mapper;
         _todoTaskRepository = todoTaskRepository;
         _todoAiMetadataRepository = todoAiMetadataRepository;
         _currentUserService = currentUserService;
+        _embeddingQueue = embeddingQueue;
+        _aiConfig = aiConfig;
+        _logger = logger;
     }
 
     public async Task<UpdateTodoTaskCommandResult> Handle(UpdateTodoTaskCommand command, CancellationToken cancellationToken)
@@ -43,9 +54,6 @@ public class UpdateTodoTaskCommandHandler : IRequestHandler<UpdateTodoTaskComman
 
         await _todoTaskRepository.Update(todoTask, cancellationToken);
 
-        // Track override whenever an AI suggestion exists. If classification is still Pending
-        // with no suggestion yet, WasOverridden is set when classification completes
-        // (see ClassificationProcessor).
         var metadata = await _todoAiMetadataRepository.GetByTodoExternalIdAsync(command.ExternalId, cancellationToken);
         if (metadata is not null && !string.IsNullOrWhiteSpace(metadata.AiPriority))
         {
@@ -53,6 +61,12 @@ public class UpdateTodoTaskCommandHandler : IRequestHandler<UpdateTodoTaskComman
                 todoTask.Priority,
                 metadata.AiPriority);
             await _todoAiMetadataRepository.SetWasOverriddenAsync(todoTask.Id, wasOverridden, cancellationToken);
+        }
+
+        if (_aiConfig.Features.EnableEmbeddings)
+        {
+            await _embeddingQueue.EnqueueAsync(todoTask.ExternalId, cancellationToken);
+            _logger.LogInformation("Queued background embedding refresh for todo {TodoExternalId}", todoTask.ExternalId);
         }
 
         todoTask = await _todoTaskRepository.Get(command.ExternalId, cancellationToken);

@@ -3,6 +3,7 @@ using Fistix.TaskManager.Core.Config;
 using Fistix.TaskManager.DataLayer.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Pgvector.EntityFrameworkCore;
 using System;
 
 namespace Fistix.TaskManager.DataLayer
@@ -11,9 +12,11 @@ namespace Fistix.TaskManager.DataLayer
   {
     public static void AddDataLayer(this IServiceCollection services, MasterConfig masterConfig)
     {
-      services.AddDbContext<EfContext>(options => options.UseNpgsql(masterConfig.ConnectionString.MainDb));
+      services.AddDbContext<EfContext>(options =>
+        options.UseNpgsql(masterConfig.ConnectionString.MainDb, o => o.UseVector()));
       services.AddScoped<ITodoTaskRepository, TodoTaskRepository>();
       services.AddScoped<ITodoAiMetadataRepository, TodoAiMetadataRepository>();
+      services.AddScoped<ITodoEmbeddingRepository, TodoEmbeddingRepository>();
       services.AddScoped<IUserProfileRepository, UserProfileRepository>();
       services.AddScoped<IRepositoryFactory, RepositoryFactory>();
     }

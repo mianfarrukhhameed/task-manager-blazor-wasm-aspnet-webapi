@@ -32,6 +32,8 @@ public static class AiServiceExtension
         services.AddSingleton<ILlmProviderService, SemanticKernelLlmProvider>();
         services.AddScoped<SummarizationPipeline>();
         services.AddScoped<ClassificationPipeline>();
+        services.AddHttpClient(nameof(SemanticKernelEmbeddingService));
+        services.AddScoped<IEmbeddingService, SemanticKernelEmbeddingService>();
 
         return services;
     }

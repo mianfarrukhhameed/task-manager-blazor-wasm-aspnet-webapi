@@ -24,6 +24,7 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
     private readonly ITodoAiMetadataRepository _todoAiMetadataRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IClassificationQueue _classificationQueue;
+    private readonly IEmbeddingQueue _embeddingQueue;
     private readonly AiConfiguration _aiConfig;
     private readonly ILogger<CreateTodoTaskCommandHandler> _logger;
 
@@ -33,6 +34,7 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
       ITodoAiMetadataRepository todoAiMetadataRepository,
       ICurrentUserService currentUserService,
       IClassificationQueue classificationQueue,
+      IEmbeddingQueue embeddingQueue,
       AiConfiguration aiConfig,
       ILogger<CreateTodoTaskCommandHandler> logger)
     {
@@ -41,6 +43,7 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
       _todoAiMetadataRepository = todoAiMetadataRepository;
       _currentUserService = currentUserService;
       _classificationQueue = classificationQueue;
+      _embeddingQueue = embeddingQueue;
       _aiConfig = aiConfig;
       _logger = logger;
     }
@@ -60,6 +63,12 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
         await _classificationQueue.EnqueueAsync(todoTask.ExternalId, cancellationToken);
         _logger.LogInformation("Queued background classification for todo {TodoExternalId}", todoTask.ExternalId);
         todoTask = await _todoTaskRepository.Get(todoTask.ExternalId, cancellationToken);
+      }
+
+      if (_aiConfig.Features.EnableEmbeddings)
+      {
+        await _embeddingQueue.EnqueueAsync(todoTask.ExternalId, cancellationToken);
+        _logger.LogInformation("Queued background embedding for todo {TodoExternalId}", todoTask.ExternalId);
       }
 
       return new CreateTodoTaskCommandResult()

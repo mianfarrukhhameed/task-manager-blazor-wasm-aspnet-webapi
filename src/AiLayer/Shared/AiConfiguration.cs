@@ -12,7 +12,18 @@ public class AiConfiguration
     public OllamaSettings Ollama { get; set; } = new();
     public GoogleAISettings GoogleAI { get; set; } = new();
     public ClaudeSettings Claude { get; set; } = new();
+    public EmbeddingSettings Embedding { get; set; } = new();
     public AiFeaturesConfiguration Features { get; set; } = new();
+}
+
+public class EmbeddingSettings
+{
+    /// <summary>OpenAI or Ollama (OpenAI-compatible embeddings API).</summary>
+    public string Provider { get; set; } = "OpenAI";
+    public string Model { get; set; } = "text-embedding-3-small";
+    public int Dimension { get; set; } = 384;
+    public string ApiKey { get; set; } = "";
+    public string Endpoint { get; set; } = "https://api.openai.com/v1";
 }
 
 public class OpenAiSettings
@@ -66,8 +77,11 @@ public class AiFeaturesConfiguration
     public bool EnableClassification { get; set; } = false;
     public AiRateLimitConfiguration ClassifyRateLimit { get; set; } = new();
     public ClassificationConfiguration Classification { get; set; } = new();
+    public bool EnableEmbeddings { get; set; } = false;
     public bool EnableSemanticSearch { get; set; } = false;
+    public AiRateLimitConfiguration SemanticSearchRateLimit { get; set; } = new();
     public bool EnableRag { get; set; } = false;
+    public AiRateLimitConfiguration RagRateLimit { get; set; } = new();
     public bool EnableFunctionCalling { get; set; } = false;
     public bool EnableAgents { get; set; } = false;
     public bool EnableMcp { get; set; } = false;
