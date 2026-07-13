@@ -289,4 +289,96 @@ public class AiController : ControllerBase
             return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to answer AI query");
         }
     }
+
+    /// <summary>
+    /// Proposes tool calls from a natural-language prompt (does not execute).
+    /// </summary>
+    [HttpPost("propose-tools")]
+    [EnableRateLimiting(RateLimitPolicies.AiFunctionCalling)]
+    [ProducesResponseType(typeof(ProposeAiToolsResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ProposeAiToolsResponseDto>> ProposeTools([FromBody] ProposeAiToolsCommand command)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI function calling is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error proposing AI tools");
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to propose AI tools");
+        }
+    }
+
+    /// <summary>
+    /// Executes user-confirmed AI tool calls.
+    /// </summary>
+    [HttpPost("execute-tools")]
+    [EnableRateLimiting(RateLimitPolicies.AiFunctionCalling)]
+    [ProducesResponseType(typeof(ExecuteAiToolsResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ExecuteAiToolsResponseDto>> ExecuteTools([FromBody] ExecuteAiToolsCommand command)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI function calling is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing AI tools");
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to execute AI tools");
+        }
+    }
 }

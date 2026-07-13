@@ -83,6 +83,7 @@ public class AiFeaturesConfiguration
     public bool EnableRag { get; set; } = false;
     public AiRateLimitConfiguration RagRateLimit { get; set; } = new();
     public bool EnableFunctionCalling { get; set; } = false;
+    public AiRateLimitConfiguration FunctionCallingRateLimit { get; set; } = new();
     public bool EnableAgents { get; set; } = false;
     public bool EnableMcp { get; set; } = false;
 }

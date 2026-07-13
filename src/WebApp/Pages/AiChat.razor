@@ -1,27 +1,102 @@
 @page "/ai-chat"
 @attribute [Authorize]
+@using System.Text.Json
 @using Fistix.TaskManager.ViewModel.Commands.Todos
 @using Fistix.TaskManager.WebApp.Services.DataServices
 @inject TodoDataService TodoDataService
 
 <h1>AI Task Assistant</h1>
-<p class="text-muted">Ask questions about your workload. Answers cite matching tasks via RAG.</p>
+<p class="text-muted">Ask questions about your workload, or propose tool actions and confirm before they run.</p>
 
-<div class="mb-3">
-  <label class="form-label">Context</label>
-  <select class="form-select" style="max-width: 16rem;" @bind="_context">
-    <option value="workload">workload</option>
-    <option value="week">week</option>
-    <option value="project">project</option>
-  </select>
-</div>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <button class="nav-link @(_mode == "ask" ? "active" : null)" @onclick='() => _mode = "ask"'>Ask (RAG)</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link @(_mode == "tools" ? "active" : null)" @onclick='() => _mode = "tools"'>Function calling</button>
+  </li>
+</ul>
 
-<div class="mb-3">
-  <label class="form-label">Question</label>
-  <textarea class="form-control" rows="3" @bind="_question" placeholder="What am I working on this week?"></textarea>
-</div>
+@if (_mode == "ask")
+{
+  <div class="mb-3">
+    <label class="form-label">Context</label>
+    <select class="form-select" style="max-width: 16rem;" @bind="_context">
+      <option value="workload">workload</option>
+      <option value="week">week</option>
+      <option value="project">project</option>
+    </select>
+  </div>
 
-<button class="btn btn-primary" disabled="@_loading" @onclick="AskAsync">Ask</button>
+  <div class="mb-3">
+    <label class="form-label">Question</label>
+    <textarea class="form-control" rows="3" @bind="_question" placeholder="What am I working on this week?"></textarea>
+  </div>
+
+  <button class="btn btn-primary" disabled="@_loading" @onclick="AskAsync">Ask</button>
+}
+else
+{
+  <div class="mb-3">
+    <label class="form-label">Prompt</label>
+    <textarea class="form-control" rows="3" @bind="_toolPrompt" placeholder="Create 3 tasks for Q2 planning with high priority"></textarea>
+  </div>
+
+  <button class="btn btn-primary" disabled="@_loading" @onclick="ProposeToolsAsync">Propose tools</button>
+
+  @if (_proposal is not null)
+  {
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="mb-2 small text-muted">Model: @_proposal.Model</div>
+        <p>@_proposal.Explanation</p>
+
+        @if (_proposal.ProposedCalls.Count == 0)
+        {
+          <div class="text-muted">No tool calls proposed.</div>
+        }
+        else
+        {
+          <div class="fw-semibold mb-2">Proposed calls</div>
+          <ul class="list-group mb-3">
+            @foreach (var call in _proposal.ProposedCalls)
+            {
+              <li class="list-group-item">
+                <code>@call.ToolName</code>
+                <pre class="mb-0 mt-2 small">@FormatArgs(call.Arguments)</pre>
+              </li>
+            }
+          </ul>
+          <button class="btn btn-success" disabled="@_loading" @onclick="ExecuteToolsAsync">Confirm &amp; execute</button>
+          <button class="btn btn-outline-secondary ms-2" disabled="@_loading" @onclick="ClearProposal">Cancel</button>
+        }
+      </div>
+    </div>
+  }
+
+  @if (_execution is not null)
+  {
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Execution results</div>
+        <ul class="list-group">
+          @foreach (var result in _execution.Results)
+          {
+            <li class="list-group-item">
+              <span class="badge @(result.Success ? "bg-success" : "bg-danger")">@(result.Success ? "ok" : "failed")</span>
+              <code class="ms-2">@result.ToolName</code>
+              <div class="mt-1">@result.Message</div>
+              @if (!string.IsNullOrWhiteSpace(result.ResultJson))
+              {
+                <pre class="mb-0 mt-2 small">@result.ResultJson</pre>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    </div>
+  }
+}
 
 @if (!string.IsNullOrWhiteSpace(_error))
 {
@@ -51,16 +126,22 @@
 }
 
 @code {
+  private string _mode = "ask";
   private string _question = string.Empty;
   private string _context = "workload";
+  private string _toolPrompt = string.Empty;
   private bool _loading;
   private string? _error;
   private AiQueryResponseDto? _response;
+  private ProposeAiToolsResponseDto? _proposal;
+  private ExecuteAiToolsResponseDto? _execution;
 
   private async Task AskAsync()
   {
     _error = null;
     _response = null;
+    _proposal = null;
+    _execution = null;
     if (string.IsNullOrWhiteSpace(_question))
     {
       _error = "Enter a question.";
@@ -84,4 +165,70 @@
       _loading = false;
     }
   }
+
+  private async Task ProposeToolsAsync()
+  {
+    _error = null;
+    _response = null;
+    _proposal = null;
+    _execution = null;
+    if (string.IsNullOrWhiteSpace(_toolPrompt))
+    {
+      _error = "Enter a prompt.";
+      return;
+    }
+
+    _loading = true;
+    try
+    {
+      var result = await TodoDataService.ProposeAiTools(_toolPrompt.Trim());
+      if (!result.IsSucceed || result.Payload is null)
+      {
+        _error = result.Message ?? "Tool proposal failed.";
+        return;
+      }
+
+      _proposal = result.Payload;
+    }
+    finally
+    {
+      _loading = false;
+    }
+  }
+
+  private async Task ExecuteToolsAsync()
+  {
+    if (_proposal is null || _proposal.ProposedCalls.Count == 0)
+    {
+      return;
+    }
+
+    _error = null;
+    _execution = null;
+    _loading = true;
+    try
+    {
+      var result = await TodoDataService.ExecuteAiTools(_proposal.ProposedCalls);
+      if (!result.IsSucceed || result.Payload is null)
+      {
+        _error = result.Message ?? "Tool execution failed.";
+        return;
+      }
+
+      _execution = result.Payload;
+    }
+    finally
+    {
+      _loading = false;
+    }
+  }
+
+  private void ClearProposal()
+  {
+    _proposal = null;
+    _execution = null;
+  }
+
+  private static string FormatArgs(Dictionary<string, JsonElement> args) =>
+    JsonSerializer.Serialize(args, new JsonSerializerOptions { WriteIndented = true });
 }

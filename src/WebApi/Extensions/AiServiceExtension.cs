@@ -1,6 +1,7 @@
 using Fistix.TaskManager.AiLayer.Abstractions;
 using Fistix.TaskManager.AiLayer.Implementations;
 using Fistix.TaskManager.AiLayer.Shared;
+using Fistix.TaskManager.AiLayer.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,6 +35,8 @@ public static class AiServiceExtension
         services.AddScoped<ClassificationPipeline>();
         services.AddScoped<SemanticSearchPipeline>();
         services.AddScoped<RAGPipeline>();
+        services.AddScoped<ToolProposalPipeline>();
+        services.AddSingleton<TodoManagementPlugin>();
         services.AddHttpClient(nameof(SemanticKernelEmbeddingService));
         services.AddScoped<IEmbeddingService, SemanticKernelEmbeddingService>();
 
