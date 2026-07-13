@@ -33,6 +33,7 @@ public static class AiServiceExtension
         services.AddScoped<SummarizationPipeline>();
         services.AddScoped<ClassificationPipeline>();
         services.AddScoped<SemanticSearchPipeline>();
+        services.AddScoped<RAGPipeline>();
         services.AddHttpClient(nameof(SemanticKernelEmbeddingService));
         services.AddScoped<IEmbeddingService, SemanticKernelEmbeddingService>();
 
