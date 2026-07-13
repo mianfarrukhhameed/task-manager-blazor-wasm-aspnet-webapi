@@ -151,5 +151,29 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<SemanticSearchResponseDto>> SemanticSearch(string query, int limit = 10)
+    {
+      var result = new ApiCallResult<SemanticSearchResponseDto>();
+      var command = new SemanticSearchTodosCommand
+      {
+        Query = query,
+        Limit = limit
+      };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/todos/search/semantic", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<SemanticSearchResponseDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }
