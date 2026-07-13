@@ -33,7 +33,7 @@ namespace Fistix.TaskManager.DataLayer
         entityModel.Property(p => p.Id)
           .ValueGeneratedOnAdd();
         entityModel.Property(p => p.ExternalId)
-          .HasDefaultValueSql("NEWSEQUENTIALID()")
+          .HasDefaultValueSql("gen_random_uuid()")
           .IsRequired();
         entityModel.HasIndex(k => k.ExternalId)
           .IsUnique();

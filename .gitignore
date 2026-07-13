@@ -62,8 +62,7 @@ appsettings.Development.json
 [Pp]ublish/
 [Pp]ackages/
 
-# Entity Framework migrations
-Migrations/
+# Entity Framework migrations are tracked under src/DataLayer/Migrations/
 
 # Test Results
 TestResults/
