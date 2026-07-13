@@ -19,6 +19,7 @@ namespace Fistix.TaskManager.ServiceLayer
       services.AddAutoMapper(x=>x.AddProfile<TodoTaskProfileMapping>());
 
       services.AddScoped<IToolExecutor, ToolExecutor>();
+      services.AddScoped<SprintOptimizerAgent>();
 
       services.AddSingleton<IClassificationQueue, ClassificationQueue>();
       services.AddScoped<IClassificationProcessor, ClassificationProcessor>();

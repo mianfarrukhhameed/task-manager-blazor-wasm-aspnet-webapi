@@ -239,5 +239,33 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<OptimizeSprintResponseDto>> OptimizeSprint(
+      int maxTasks = 12,
+      int durationDays = 14,
+      string? name = null)
+    {
+      var result = new ApiCallResult<OptimizeSprintResponseDto>();
+      var command = new OptimizeSprintCommand
+      {
+        MaxTasks = maxTasks,
+        DurationDays = durationDays,
+        Name = name
+      };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/agent/sprint-optimizer", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<OptimizeSprintResponseDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }

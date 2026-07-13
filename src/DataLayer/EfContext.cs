@@ -15,6 +15,8 @@ namespace Fistix.TaskManager.DataLayer
     public DbSet<TodoEmbedding> TodoEmbeddings { get; set; }
     public DbSet<AiConversation> AiConversations { get; set; }
     public DbSet<ToolExecutionLog> ToolExecutionLogs { get; set; }
+    public DbSet<Sprint> Sprints { get; set; }
+    public DbSet<SprintTodo> SprintTodos { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,6 +30,8 @@ namespace Fistix.TaskManager.DataLayer
       TodoEmbeddingModelConfig(modelBuilder);
       AiConversationModelConfig(modelBuilder);
       ToolExecutionLogModelConfig(modelBuilder);
+      SprintModelConfig(modelBuilder);
+      SprintTodoModelConfig(modelBuilder);
     }
 
     private void TodoTaskModelConfig(ModelBuilder modelBuilder)
@@ -115,6 +119,43 @@ namespace Fistix.TaskManager.DataLayer
         entityModel.HasIndex(p => p.UserId);
         entityModel.HasIndex(p => p.ExecutedAt);
         entityModel.HasIndex(p => p.ToolName);
+      });
+    }
+
+    private void SprintModelConfig(ModelBuilder modelBuilder)
+    {
+      modelBuilder.Entity<Sprint>(entityModel =>
+      {
+        entityModel.ToTable("Sprint");
+        entityModel.HasKey(k => k.Id);
+        entityModel.Property(p => p.Id).ValueGeneratedOnAdd();
+        entityModel.Property(p => p.ExternalId)
+          .HasDefaultValueSql("gen_random_uuid()")
+          .IsRequired();
+        entityModel.HasIndex(k => k.ExternalId).IsUnique();
+        entityModel.Property(p => p.Name).HasMaxLength(200).IsRequired();
+        entityModel.Property(p => p.CreatedByUserId).IsRequired();
+        entityModel.Property(p => p.Reasoning).HasMaxLength(4000);
+        entityModel.HasIndex(p => p.CreatedByUserId);
+        entityModel.HasIndex(p => p.CreatedAt);
+      });
+    }
+
+    private void SprintTodoModelConfig(ModelBuilder modelBuilder)
+    {
+      modelBuilder.Entity<SprintTodo>(entityModel =>
+      {
+        entityModel.ToTable("SprintTodo");
+        entityModel.HasKey(k => new { k.SprintId, k.TodoId });
+        entityModel.HasOne(st => st.Sprint)
+          .WithMany(s => s.SprintTodos)
+          .HasForeignKey(st => st.SprintId)
+          .OnDelete(DeleteBehavior.Cascade);
+        entityModel.HasOne(st => st.TodoTask)
+          .WithMany()
+          .HasForeignKey(st => st.TodoId)
+          .OnDelete(DeleteBehavior.Cascade);
+        entityModel.HasIndex(st => st.TodoId);
       });
     }
   }
