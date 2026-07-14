@@ -152,7 +152,11 @@ public class ClassificationProcessor : IClassificationProcessor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Classification failed for todo {TodoExternalId}", todoExternalId);
+            _logger.LogError(
+                ex,
+                "Classification failed for todo {TodoExternalId}. RootCause: {RootCause}",
+                todoExternalId,
+                GetRootCause(ex));
             await _todoAiMetadataRepository.MarkClassificationFailedAsync(todo.Id, cancellationToken);
 
             var failed = new TaskClassificationDto
@@ -194,5 +198,16 @@ public class ClassificationProcessor : IClassificationProcessor
             FromCache = fromCache,
             GeneratedAt = metadata.UpdatedAt ?? metadata.CreatedAt
         };
+    }
+
+    private static string GetRootCause(Exception ex)
+    {
+        Exception current = ex;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return $"{current.GetType().Name}: {current.Message}";
     }
 }
