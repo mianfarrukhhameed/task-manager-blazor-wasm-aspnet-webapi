@@ -31,7 +31,7 @@ sequenceDiagram
     participant State as TodoStateService
     participant API as TodosController
     participant MediatR as CommandHandler
-    participant DB as SQL Server (EF Core)
+    participant DB as PostgreSQL (EF Core)
 
     User->>Blazor: Click "Submit"
     Blazor->>Blazor: Local Validation (Fluent)
@@ -57,33 +57,47 @@ Secrets and environment-specific values are **not** committed to source control.
 
 | Variable | Required | Description |
 |---|---|---|
-| `ConnectionStrings__MainDb` | Yes | SQL Server connection string for the main database |
+| `ConnectionStrings__MainDb` | Yes | PostgreSQL connection string for the main database |
 | `Ai__GoogleAI__ApiKey` | When `Ai:Provider` is `google` | Google AI (Gemini) API key |
 | `Ai__Claude__ApiKey` | When `Ai:Provider` is `claude` | Anthropic API key |
 | `Ai__OpenAI__ApiKey` | When `Ai:Provider` is `openai` | OpenAI API key |
-| `App__ApiAccessKey` | Optional | API access key if the `HaveApiAccessKey` filter is enabled |
 | `AppConfigConnectionString` | Optional | Azure App Configuration connection string |
 | `AppConfigEnvironmentName` | Optional | Azure App Configuration label filter (e.g. `dev`, `prod`) |
 | `KeyVault__Uri` | Production | Azure Key Vault URI; loaded when `ASPNETCORE_ENVIRONMENT` is `Production` |
+| `AllowedHosts` | Production | Semicolon-separated hostnames allowed by the API (see `appsettings.Production.json`) |
 
+### Server-side access token
 
+The API stores the incoming bearer token via JWT `SaveToken` (not as a user claim). Inject `IAccessTokenProvider` when a handler or service needs the current user's access token (e.g. future Auth0 Management API calls):
+
+```csharp
+var token = await _accessTokenProvider.GetAccessTokenAsync(cancellationToken);
+```
+
+`RequireHttpsMetadata` is enabled outside Development so JWT metadata is fetched over HTTPS only.
 ### Local development setup
 
-1. Copy required values into `src/WebApi/Properties/launchSettings.json` under `environmentVariables`, **or** use user secrets:
+1. Start PostgreSQL (Postgres 16 via Docker Compose; host port **5433** to avoid clashing with a local Postgres on 5432):
+
+```bash
+docker compose up -d
+```
+
+2. Copy required values into `src/WebApi/Properties/launchSettings.json` under `environmentVariables`, **or** use user secrets:
 
 ```bash
 cd src/WebApi
-dotnet user-secrets set "ConnectionStrings:MainDb" "Server=localhost,1433;Database=Task-db;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
+dotnet user-secrets set "ConnectionStrings:MainDb" "Host=localhost;Port=5433;Database=taskdb;Username=taskuser;Password=taskpass"
 ```
 
-2. Export AI keys in your shell or IDE run configuration (`launchSettings.json` environment variables):
+3. Export AI keys in your shell or IDE run configuration (`launchSettings.json` environment variables):
 
 ```bash
 export Ai__GoogleAI__ApiKey="your-google-ai-key"
 export Ai__Claude__ApiKey="your-anthropic-key"
 ```
 
-3. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored; use placeholders only in tracked files.
+4. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored; use placeholders only in tracked files.
 
 ### Logging
 
@@ -96,3 +110,70 @@ LLM prompts and task content are logged at **Debug** level only. At **Informatio
   }
 }
 ```
+
+### Database migrations
+
+Schema changes are managed with EF Core migrations in `src/DataLayer/Migrations/`.
+
+Apply pending migrations locally:
+
+```bash
+cd src
+dotnet ef database update --project DataLayer/DataLayer.csproj --startup-project WebApi/WebApi.csproj
+```
+
+In Development, migrations are applied automatically on API startup.
+
+Add a new migration after model changes:
+
+```bash
+cd src
+dotnet ef migrations add <MigrationName> --project DataLayer/DataLayer.csproj --startup-project WebApi/WebApi.csproj
+```
+
+### AI feature flags
+
+Disable AI summarization without removing the endpoint:
+
+```json
+"Ai": {
+  "Features": {
+    "EnableSummarization": false
+  }
+}
+```
+
+When disabled, `POST /api/ai/summarize` returns **503 Service Unavailable**.
+
+### AI rate limiting
+
+`POST /api/ai/summarize` is rate-limited per authenticated user (`sub` claim), falling back to client IP when unauthenticated.
+
+```json
+"Ai": {
+  "Features": {
+    "SummarizeRateLimit": {
+      "Enabled": true,
+      "PermitLimit": 10,
+      "WindowMinutes": 1
+    }
+  }
+}
+```
+
+When the limit is exceeded, the API returns **429 Too Many Requests** with a `Retry-After` header.
+
+### Input validation limits
+
+| Field | Max length |
+|---|---|
+| Title | 200 |
+| Description | 4,000 |
+| AI summary (output) | 500 (truncated with warning if exceeded) |
+
+### Production hardening (Phase 6)
+
+- **Swagger UI** is enabled only in Development.
+- **Security headers** are applied on every API response (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, baseline `Content-Security-Policy`).
+- **HSTS** is enabled outside Development.
+- **`AllowedHosts`**: Development allows `*`; Production defaults to `localhost;api.taskmanager.com` — override via `appsettings.Production.json` or environment for your deployment hostname.

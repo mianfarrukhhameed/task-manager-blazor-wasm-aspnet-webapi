@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Fistix.TaskManager.Core;
 using Fistix.TaskManager.Core.DomainModel.Aggregates;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
@@ -12,7 +13,8 @@ namespace Fistix.TaskManager.Core.AutoMapperProfiles
     {
       CreateMap<CreateTodoTaskCommand, TodoTask>()
                 .ForMember(up => up.Id, m => m.Ignore())
-                .ForMember(up => up.CreatedOn, m => m.MapFrom(x => DateTime.Now));
+                .ForMember(up => up.DueDate, m => m.MapFrom(x => DateTimeUtc.EnsureUtc(x.DueDate)))
+                .ForMember(up => up.CreatedOn, m => m.MapFrom(x => DateTime.UtcNow));
 
       CreateMap<TodoTask, TodoTaskDto>()
         .ForMember(d => d.AiSummary, o => o.MapFrom(s => s.AiMetadata != null ? s.AiMetadata.AiSummary : null))

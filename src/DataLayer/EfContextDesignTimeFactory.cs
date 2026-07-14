@@ -18,11 +18,10 @@ public class EfContextDesignTimeFactory : IDesignTimeDbContextFactory<EfContext>
             .Build();
 
         var connectionString = configuration.GetConnectionString("MainDb")
-            ?? Environment.GetEnvironmentVariable("ConnectionStrings__MainDb")
-            ?? "Server=localhost,1433;Database=Task-db;TrustServerCertificate=True;";
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__MainDb");
 
         var optionsBuilder = new DbContextOptionsBuilder<EfContext>();
-        optionsBuilder.UseSqlServer(connectionString);
+        optionsBuilder.UseNpgsql(connectionString);
 
         return new EfContext(optionsBuilder.Options);
     }

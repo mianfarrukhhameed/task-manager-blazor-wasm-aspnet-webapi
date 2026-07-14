@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Fistix.TaskManager.AiLayer.Shared;
+using Fistix.TaskManager.Core;
 using Fistix.TaskManager.Core.Abstractions.Repositories;
 using Fistix.TaskManager.Core.Abstractions.Services;
 using Fistix.TaskManager.Core.DomainModel.Aggregates;
@@ -49,6 +50,7 @@ namespace Fistix.TaskManager.ServiceLayer.Todos
     {
       var todoTask = _mapper.Map<TodoTask>(command);
       todoTask.GenerateNewExternalId();
+      todoTask.DueDate = DateTimeUtc.EnsureUtc(todoTask.DueDate);
       todoTask.CreatedOn = DateTime.UtcNow;
       todoTask.CreatedByUserId = TodoAccessGuard.RequireCurrentUserId(_currentUserService);
       await _todoTaskRepository.Create(todoTask, cancellationToken);

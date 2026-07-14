@@ -1,10 +1,10 @@
-using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
+using System.Net;
+using System.Text.Json;
 using Fistix.TaskManager.AiLayer.Abstractions;
 using Fistix.TaskManager.AiLayer.Models;
 using Fistix.TaskManager.AiLayer.Shared;
-using System.Net;
-using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel;
 
 namespace Fistix.TaskManager.AiLayer.Implementations;
 
@@ -96,7 +96,7 @@ Return JSON exactly in this shape:
                 {
                     using var timeoutCts = new CancellationTokenSource(_classificationConfig.RequestTimeoutMs);
                     var rawResponse = await InvokeLlmAsync(kernel, arguments, modelLabel, timeoutCts.Token);
-                    var parsed = ParseResponse(rawResponse);
+                    var parsed = ParseResponse(rawResponse, modelLabel);
 
                     var (priority, confidence, reason) = ClassificationGuardrails.Apply(
                         parsed.Priority,
@@ -130,58 +130,78 @@ Return JSON exactly in this shape:
                 {
                     lastException = ex;
                     _logger.LogWarning(ex,
-                        "Transient LLM error for todo {TodoExternalId} using model {Model}, attempt {Attempt}",
+                        "Transient LLM error for todo {TodoExternalId} using model {Model}, attempt {Attempt}. RootCause: {RootCause}",
                         classificationRequest.TodoExternalId,
                         modelLabel,
-                        attempt + 1);
+                        attempt + 1,
+                        GetRootCause(ex));
                 }
                 catch (Exception ex) when (IsTransientLlmError(ex))
                 {
                     lastException = ex;
                     _logger.LogWarning(ex,
-                        "Transient LLM error for todo {TodoExternalId} using model {Model}; trying next fallback if available",
+                        "Transient LLM error for todo {TodoExternalId} using model {Model}; trying next fallback if available. RootCause: {RootCause}",
                         classificationRequest.TodoExternalId,
-                        modelLabel);
+                        modelLabel,
+                        GetRootCause(ex));
                     break;
                 }
                 catch (Exception ex)
                 {
                     lastException = ex;
                     _logger.LogWarning(ex,
-                        "Non-retryable classification error for todo {TodoExternalId} using model {Model}",
+                        "Non-retryable classification error for todo {TodoExternalId} using model {Model}. RootCause: {RootCause}",
                         classificationRequest.TodoExternalId,
-                        modelLabel);
+                        modelLabel,
+                        GetRootCause(ex));
                     break;
                 }
             }
         }
 
         _logger.LogError(lastException,
-            "Error during classification for todo {TodoExternalId} after all attempts",
-            classificationRequest.TodoExternalId);
+            "Error during classification for todo {TodoExternalId} after all attempts. RootCause: {RootCause}",
+            classificationRequest.TodoExternalId,
+            lastException is null ? "none" : GetRootCause(lastException));
 
         throw lastException ?? new InvalidOperationException("Classification failed with no captured exception.");
     }
 
-    private static (string Priority, float Confidence, string? Reason) ParseResponse(string rawResponse)
+    private (string Priority, float Confidence, string? Reason) ParseResponse(string rawResponse, string modelLabel)
     {
-        var json = ExtractJson(rawResponse);
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
+        try
+        {
+            var json = ExtractJson(rawResponse);
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
 
-        var priority = root.TryGetProperty("priority", out var priorityElement)
-            ? priorityElement.GetString() ?? "MEDIUM"
-            : "MEDIUM";
+            var priority = root.TryGetProperty("priority", out var priorityElement)
+                ? priorityElement.GetString() ?? "MEDIUM"
+                : "MEDIUM";
 
-        var confidence = root.TryGetProperty("confidence", out var confidenceElement) && confidenceElement.TryGetSingle(out var value)
-            ? value
-            : 0.5f;
+            var confidence = root.TryGetProperty("confidence", out var confidenceElement) && confidenceElement.TryGetSingle(out var value)
+                ? value
+                : 0.5f;
 
-        var reason = root.TryGetProperty("reason", out var reasonElement)
-            ? reasonElement.GetString()
-            : null;
+            var reason = root.TryGetProperty("reason", out var reasonElement)
+                ? reasonElement.GetString()
+                : null;
 
-        return (ClassificationGuardrails.NormalizePriority(priority), confidence, reason);
+            return (ClassificationGuardrails.NormalizePriority(priority), confidence, reason);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to parse LLM classification response. Provider: {Provider}, Model: {Model}, RootCause: {RootCause}, RawResponse: {RawResponse}",
+                _aiConfig.Provider,
+                modelLabel,
+                GetRootCause(ex),
+                rawResponse);
+            throw new InvalidOperationException(
+                $"AI returned an invalid classification response from {_aiConfig.Provider}/{modelLabel}.",
+                ex);
+        }
     }
 
     private static string ExtractJson(string rawResponse)
@@ -204,7 +224,7 @@ Return JSON exactly in this shape:
             return trimmed[firstBrace..(lastBrace + 1)];
         }
 
-        throw new InvalidOperationException("AI returned an invalid classification response.");
+        throw new InvalidOperationException("AI returned an invalid classification response (no JSON object found).");
     }
 
     private IEnumerable<(Kernel Kernel, string ModelLabel)> GetKernelsToTry()
@@ -241,9 +261,10 @@ Return JSON exactly in this shape:
         var function = kernel.CreateFunctionFromPrompt(ClassificationPrompt);
 
         _logger.LogInformation(
-            "LLM classify request -> Provider: {Provider}, Model: {Model}, TitleLength: {TitleLength}, DescriptionLength: {DescriptionLength}",
+            "LLM classify request -> Provider: {Provider}, Model: {Model}, TimeoutMs: {TimeoutMs}, TitleLength: {TitleLength}, DescriptionLength: {DescriptionLength}",
             _aiConfig.Provider,
             modelLabel,
+            _classificationConfig.RequestTimeoutMs,
             arguments["title"]?.ToString()?.Length ?? 0,
             arguments["description"]?.ToString()?.Length ?? 0);
 
@@ -253,10 +274,11 @@ Return JSON exactly in this shape:
             var rawResponse = result.GetValue<string>()?.Trim() ?? string.Empty;
 
             _logger.LogInformation(
-                "LLM classify response <- Provider: {Provider}, Model: {Model}, ResponseLength: {ResponseLength}",
+                "LLM classify response <- Provider: {Provider}, Model: {Model}, ResponseLength: {ResponseLength}, RawResponse: {RawResponse}",
                 _aiConfig.Provider,
                 modelLabel,
-                rawResponse.Length);
+                rawResponse.Length,
+                rawResponse);
 
             if (string.IsNullOrWhiteSpace(rawResponse))
             {
@@ -268,16 +290,70 @@ Return JSON exactly in this shape:
         catch (HttpOperationException httpEx)
         {
             _logger.LogWarning(
-                "LLM classify error <- Provider: {Provider}, Model: {Model}, Status: {StatusCode}",
+                httpEx,
+                "LLM classify HTTP error <- Provider: {Provider}, Model: {Model}, Status: {StatusCode}, RootCause: {RootCause}, ResponseContent: {ResponseContent}",
                 _aiConfig.Provider,
                 modelLabel,
-                httpEx.StatusCode);
+                httpEx.StatusCode,
+                GetRootCause(httpEx),
+                httpEx.ResponseContent);
+
             throw;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (IsCanceledByTimeout(ex, cancellationToken))
         {
-            throw new TimeoutException($"Classification timed out after {_classificationConfig.RequestTimeoutMs}ms.");
+            // CTS from RequestTimeoutMs fired — no raw LLM body is available.
+            _logger.LogWarning(
+                ex,
+                "LLM classify timeout <- Provider: {Provider}, Model: {Model}, TimeoutMs: {TimeoutMs}, RootCause: {RootCause}. No raw LLM response (request canceled before completion).",
+                _aiConfig.Provider,
+                modelLabel,
+                _classificationConfig.RequestTimeoutMs,
+                GetRootCause(ex));
+
+            throw new TimeoutException(
+                $"Classification timed out after {_classificationConfig.RequestTimeoutMs}ms calling {_aiConfig.Provider}/{modelLabel}.",
+                ex);
         }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "LLM classify error <- Provider: {Provider}, Model: {Model}, RootCause: {RootCause}",
+                _aiConfig.Provider,
+                modelLabel,
+                GetRootCause(ex));
+            throw;
+        }
+    }
+
+    private static bool IsCanceledByTimeout(Exception ex, CancellationToken cancellationToken)
+    {
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is OperationCanceledException or TaskCanceledException or KernelFunctionCanceledException)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetRootCause(Exception ex)
+    {
+        Exception current = ex;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return $"{current.GetType().Name}: {current.Message}";
     }
 
     private static bool IsTransientLlmError(Exception ex)

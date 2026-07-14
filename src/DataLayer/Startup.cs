@@ -11,7 +11,7 @@ namespace Fistix.TaskManager.DataLayer
   {
     public static void AddDataLayer(this IServiceCollection services, MasterConfig masterConfig)
     {
-      services.AddDbContext<EfContext>(options => options.UseSqlServer(masterConfig.ConnectionString.MainDb));
+      services.AddDbContext<EfContext>(options => options.UseNpgsql(masterConfig.ConnectionString.MainDb));
       services.AddScoped<ITodoTaskRepository, TodoTaskRepository>();
       services.AddScoped<ITodoAiMetadataRepository, TodoAiMetadataRepository>();
       services.AddScoped<IUserProfileRepository, UserProfileRepository>();
