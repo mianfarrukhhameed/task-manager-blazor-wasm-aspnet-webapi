@@ -40,7 +40,7 @@ public sealed class AiChatClientFactory
     private IChatClient CreateOpenAiClient()
     {
         var apiKey = ResolveApiKey(_aiConfig.OpenAI.ApiKey);
-        var model = string.IsNullOrWhiteSpace(_aiConfig.OpenAI.Model) ? "gpt-4o-mini" : _aiConfig.OpenAI.Model;
+        var model = ResolveModelOverride(_aiConfig.OpenAI.Model, "gpt-4o-mini");
         _logger.LogInformation("MAF chat client using OpenAI model {Model}", model);
         return new OpenAIClient(apiKey).GetChatClient(model).AsIChatClient();
     }
@@ -54,7 +54,7 @@ public sealed class AiChatClientFactory
             throw new InvalidOperationException("Ai:AzureOpenAI:Endpoint is required for Azure OpenAI agents.");
         }
 
-        var model = string.IsNullOrWhiteSpace(_aiConfig.AzureOpenAI.Model) ? "gpt-4o" : _aiConfig.AzureOpenAI.Model;
+        var model = ResolveModelOverride(_aiConfig.AzureOpenAI.Model, "gpt-4o");
         var options = new OpenAIClientOptions { Endpoint = new Uri($"{endpoint}/openai/v1") };
         _logger.LogInformation("MAF chat client using Azure OpenAI deployment {Model}", model);
         return new OpenAIClient(new ApiKeyCredential(apiKey), options).GetChatClient(model).AsIChatClient();
@@ -70,7 +70,7 @@ public sealed class AiChatClientFactory
             endpoint += "/v1";
         }
 
-        var model = string.IsNullOrWhiteSpace(_aiConfig.Ollama.Model) ? "mistral:7b" : _aiConfig.Ollama.Model;
+        var model = ResolveModelOverride(_aiConfig.Ollama.Model, "mistral:7b");
         var options = new OpenAIClientOptions { Endpoint = new Uri(endpoint) };
         _logger.LogInformation("MAF chat client using Ollama model {Model} at {Endpoint}", model, endpoint);
         return new OpenAIClient(new ApiKeyCredential("ollama"), options).GetChatClient(model).AsIChatClient();
@@ -79,7 +79,7 @@ public sealed class AiChatClientFactory
     private IChatClient CreateGoogleOpenAiCompatibleClient()
     {
         var apiKey = ResolveApiKey(_aiConfig.GoogleAI.ApiKey);
-        var model = string.IsNullOrWhiteSpace(_aiConfig.GoogleAI.Model) ? "gemini-2.5-flash" : _aiConfig.GoogleAI.Model;
+        var model = ResolveGoogleMafModel();
         var options = new OpenAIClientOptions
         {
             Endpoint = new Uri("https://generativelanguage.googleapis.com/v1beta/openai/")
@@ -87,6 +87,52 @@ public sealed class AiChatClientFactory
         _logger.LogInformation("MAF chat client using Google OpenAI-compatible model {Model}", model);
         return new OpenAIClient(new ApiKeyCredential(apiKey), options).GetChatClient(model).AsIChatClient();
     }
+
+    /// <summary>
+    /// Gemini 3.x via OpenAI-compat often returns 400 on tool-call follow-ups because thought/reasoning
+    /// signatures are not preserved by the OpenAI client. Prefer an explicit Agents:ChatModel, else
+    /// a non-3.x Google model (fallback list or gemini-2.5-flash).
+    /// </summary>
+    private string ResolveGoogleMafModel()
+    {
+        if (!string.IsNullOrWhiteSpace(_aiConfig.Agents.ChatModel))
+        {
+            return _aiConfig.Agents.ChatModel.Trim();
+        }
+
+        var primary = string.IsNullOrWhiteSpace(_aiConfig.GoogleAI.Model)
+            ? "gemini-2.5-flash"
+            : _aiConfig.GoogleAI.Model.Trim();
+
+        if (!IsGemini3Family(primary))
+        {
+            return primary;
+        }
+
+        var safer = (_aiConfig.GoogleAI.FallbackModels ?? [])
+            .Select(m => m?.Trim())
+            .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m) && !IsGemini3Family(m!));
+
+        safer ??= "gemini-2.5-flash";
+        _logger.LogWarning(
+            "Ai:GoogleAI:Model '{Primary}' is Gemini 3.x; MAF OpenAI-compat tool calling often fails with HTTP 400. Using '{Safer}' for agents. Set Ai:Agents:ChatModel to override.",
+            primary,
+            safer);
+        return safer;
+    }
+
+    private string ResolveModelOverride(string configured, string fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(_aiConfig.Agents.ChatModel))
+        {
+            return _aiConfig.Agents.ChatModel.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
+    }
+
+    private static bool IsGemini3Family(string model) =>
+        model.StartsWith("gemini-3", StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveApiKey(string configuredValue)
     {

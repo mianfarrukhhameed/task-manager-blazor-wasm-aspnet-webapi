@@ -112,7 +112,7 @@ Then set `Ai:Features:EnableEmbeddings` to `true`. Alternate providers remain av
 
 ### Sprint planning agent (Microsoft Agent Framework)
 
-With `Ai:Features:EnableAgents` set to `true`, **AI Chat → Optimize Sprint** runs a real MAF agent that multi-steps through tools (`search_incomplete_todos`, `get_workload_stats`, `find_due_soon_todos`, `propose_sprint_plan`, `create_sprint`). The response shows an **Agent steps** trail. Google Gemini is wired via the Generative Language OpenAI-compatible endpoint so tool calling works. Heuristic selection still runs if the agent fails.
+With `Ai:Features:EnableAgents` set to `true`, **AI Chat → Optimize Sprint** runs a real MAF agent that multi-steps through tools (`search_incomplete_todos`, `get_workload_stats`, `find_due_soon_todos`, `propose_sprint_plan`, `create_sprint`). The response shows an **Agent steps** trail. Google Gemini is wired via the Generative Language OpenAI-compatible endpoint so tool calling works. Set `Ai:Agents:ChatModel` (default in appsettings: `gemini-2.5-flash`) for the agent — Gemini 3.x models often return HTTP 400 on tool follow-ups through the OpenAI-compat layer. Heuristic selection still runs if the agent fails.
 
 ### Logging
 

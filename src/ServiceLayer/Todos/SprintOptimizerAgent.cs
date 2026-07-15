@@ -98,6 +98,15 @@ public class SprintOptimizerAgent
 
             _logger.LogWarning("MAF sprint agent did not select tasks; falling back to heuristic.");
         }
+        catch (System.ClientModel.ClientResultException ex)
+        {
+            var body = TryReadErrorBody(ex);
+            _logger.LogWarning(
+                ex,
+                "MAF sprint agent failed with HTTP {Status}; falling back to heuristic. Body: {Body}",
+                ex.Status,
+                body);
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "MAF sprint agent failed; falling back to heuristic selection");
@@ -185,6 +194,29 @@ public class SprintOptimizerAgent
         return string.IsNullOrWhiteSpace(proposeReasoning)
             ? "Sprint planned by agent."
             : proposeReasoning;
+    }
+
+    private static string TryReadErrorBody(System.ClientModel.ClientResultException ex)
+    {
+        try
+        {
+            // Prefer explicit content when the SDK exposes it; otherwise fall back to message text.
+            var contentProp = ex.GetType().GetProperty("Content");
+            if (contentProp?.GetValue(ex) is BinaryData data)
+            {
+                var text = data.ToString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text.Length > 2000 ? text[..2000] + "…" : text;
+                }
+            }
+        }
+        catch
+        {
+            // ignore reflection failures
+        }
+
+        return ex.Message;
     }
 }
 
