@@ -1,42 +1,49 @@
 ﻿@using Fistix.TaskManager.ViewModel.Commands.Todos
 @using FluentValidation
- 
-<h3>Create New Task</h3>
 
-<EditForm Model="@Command" OnSubmit="HandleSubmit">
-  <p>
-    <label>
-      Title:
-      <InputText id="title" @bind-Value="Command.Title" />
-      <span class="validation-message">@GetError(nameof(CreateTodoTaskCommand.Title))</span>
-    </label>
-  </p>
-  <p>
-    <label>
-      Description:
-      <InputTextArea id="description" @bind-Value="Command.Description" />
-      <span class="validation-message">@GetError(nameof(CreateTodoTaskCommand.Description))</span>
-    </label>
-  </p>
-  <p>
-    <label>
-      Due Date:
-      <InputDate id="dueDate" @bind-Value="Command.DueDate" />
-      <span class="validation-message">@GetError(nameof(CreateTodoTaskCommand.DueDate))</span>
-    </label>
-  </p>
-  <button class="btn btn-primary" type="submit">Submit</button>
-</EditForm>
+<MudPaper Class="pa-4" Elevation="2">
+  <MudText Typo="Typo.h6" Class="mb-4">Create New Task</MudText>
+
+  <EditForm Model="@Command" OnSubmit="HandleSubmit">
+    <MudStack Spacing="3">
+      <MudTextField @bind-Value="Command.Title"
+                    Label="Title"
+                    Variant="Variant.Outlined"
+                    Required="true"
+                    Error="@HasError(nameof(CreateTodoTaskCommand.Title))"
+                    ErrorText="@GetError(nameof(CreateTodoTaskCommand.Title))" />
+
+      <MudTextField @bind-Value="Command.Description"
+                    Label="Description"
+                    Variant="Variant.Outlined"
+                    Lines="3"
+                    Error="@HasError(nameof(CreateTodoTaskCommand.Description))"
+                    ErrorText="@GetError(nameof(CreateTodoTaskCommand.Description))" />
+
+      <MudDatePicker Date="_dueDate"
+                     DateChanged="OnDueDateChanged"
+                     Label="Due Date"
+                     Variant="Variant.Outlined"
+                     Error="@HasError(nameof(CreateTodoTaskCommand.DueDate))"
+                     ErrorText="@GetError(nameof(CreateTodoTaskCommand.DueDate))" />
+
+      <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Create task</MudButton>
+    </MudStack>
+  </EditForm>
+</MudPaper>
 
 @code {
   [Inject]
   private IValidator<CreateTodoTaskCommand> Validator { get; set; } = default!;
 
-  private CreateTodoTaskCommand Command { get; set; } = new CreateTodoTaskCommand();
+  private CreateTodoTaskCommand Command { get; set; } = new();
+  private DateTime? _dueDate = DateTime.Today.AddDays(1);
   private Dictionary<string, string> _errors = new();
 
   [Parameter]
   public EventCallback OnSubmitForm { get; set; }
+
+  private bool HasError(string field) => _errors.ContainsKey(field);
 
   private string GetError(string field) =>
     _errors.TryGetValue(field, out var message) ? message : string.Empty;
@@ -44,6 +51,11 @@
   private async Task HandleSubmit()
   {
     _errors.Clear();
+    if (_dueDate.HasValue)
+    {
+      Command.DueDate = _dueDate.Value;
+    }
+
     var result = await Validator.ValidateAsync(Command);
     if (!result.IsValid)
     {
@@ -56,5 +68,9 @@
     }
 
     await OnSubmitForm.InvokeAsync(Command);
+    Command = new CreateTodoTaskCommand();
+    _dueDate = DateTime.Today.AddDays(1);
   }
+
+  private void OnDueDateChanged(DateTime? date) => _dueDate = date;
 }

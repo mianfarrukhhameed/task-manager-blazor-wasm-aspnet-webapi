@@ -7,24 +7,36 @@
 
 <AuthorizeView>
   <Authorizing>
-    <span class="text-muted">Checking sign-in...</span>
+    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mx-2" />
   </Authorizing>
-  <Authorized>
-    Hello, @context.User.Identity?.Name!
-    <button class="nav-link btn btn-link" @onclick="BeginSignOut">
-      Log out
-    </button>
+  <Authorized Context="authState">
+    <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+      <ActivatorContent Context="_">
+        <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" />
+      </ActivatorContent>
+      <ChildContent>
+        <MudMenuItem Disabled="true">
+          <MudText Typo="Typo.body2">@authState.User.Identity?.Name</MudText>
+        </MudMenuItem>
+        <MudDivider />
+        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="BeginSignOut">Log out</MudMenuItem>
+      </ChildContent>
+    </MudMenu>
   </Authorized>
   <NotAuthorized>
-    <a href="authentication/login" @onclick="BeginLogin" @onclick:preventDefault="true">Log in</a>
+    <MudButton Href="authentication/login"
+               Variant="Variant.Text"
+               Color="Color.Inherit"
+               OnClick="BeginLogin"
+               OnClickPreventDefault="true">
+      Log in
+    </MudButton>
   </NotAuthorized>
 </AuthorizeView>
 
 @code {
-  private void BeginLogin(MouseEventArgs args)
-  {
+  private void BeginLogin(MouseEventArgs args) =>
     Navigation.NavigateToLogin("authentication/login");
-  }
 
   private async Task BeginSignOut(MouseEventArgs args)
   {

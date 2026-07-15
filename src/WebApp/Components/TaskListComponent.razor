@@ -5,131 +5,106 @@
 @inject TodoStateService TodoStateService
 @inject TodoDataService TodoDataService
 
-<div class="mb-3">
-  <div class="input-group">
-    <input class="form-control" placeholder="Search tasks..." @bind="_searchText" @bind:event="oninput" />
-    <div class="input-group-text">
-      <input class="form-check-input mt-0 me-2" type="checkbox" id="semanticToggle" @bind="_useSemanticSearch" />
-      <label class="form-check-label" for="semanticToggle">Semantic Search</label>
-    </div>
-    <button class="btn btn-outline-primary" @onclick="RunSearch" disabled="@_searching">Search</button>
-  </div>
+<MudStack Spacing="3" Class="mb-4">
+  <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+    <MudTextField @bind-Value="_searchText"
+                  Placeholder="Search tasks…"
+                  Variant="Variant.Outlined"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true"
+                  Style="min-width: 16rem; flex: 1;" />
+    <MudSwitch @bind-Value="_useSemanticSearch" Label="Semantic search" Color="Color.Primary" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RunSearch" Disabled="_searching">
+      Search
+    </MudButton>
+  </MudStack>
+
   @if (!string.IsNullOrWhiteSpace(_searchError))
   {
-    <div class="text-danger small mt-1">@_searchError</div>
+    <MudAlert Severity="Severity.Error" Dense="true">@_searchError</MudAlert>
   }
-</div>
+</MudStack>
 
 @if (_semanticResults is { Count: > 0 })
 {
-  <div class="alert alert-light border mb-3">
-    <div class="fw-semibold mb-2">Semantic results (@_semanticExecutionMs ms)</div>
-    <ul class="list-unstyled mb-0">
+  <MudPaper Class="pa-3 mb-4" Elevation="1">
+    <MudText Typo="Typo.subtitle2" Class="mb-2">Semantic results (@_semanticExecutionMs ms)</MudText>
+    <MudList T="SemanticSearchHitDto" Dense="true">
       @foreach (var hit in _semanticResults)
       {
-        <li class="mb-2 d-flex justify-content-between align-items-start gap-2">
-          <div>
-            <div class="fw-semibold">@hit.Title</div>
-            <div class="small text-muted text-truncate" style="max-width: 40rem;">@(hit.Description ?? "")</div>
-          </div>
-          <span class="badge bg-primary">@($"{hit.Similarity:P0}")</span>
-        </li>
+        <MudListItem>
+          <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Style="width:100%;">
+            <div>
+              <MudText Typo="Typo.body1">@hit.Title</MudText>
+              <MudText Typo="Typo.caption" Color="Color.Secondary">@(hit.Description ?? "")</MudText>
+            </div>
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary">@($"{hit.Similarity:P0}")</MudChip>
+          </MudStack>
+        </MudListItem>
       }
-    </ul>
-  </div>
+    </MudList>
+  </MudPaper>
 }
 
-<div class="table-responsive">
-  <table class="table table-hover">
-    <thead class="table-light">
-      <tr>
-        <th>Id</th>
-        <th>Title</th>
-        <th>Due Date</th>
-        <th>Status</th>
-        <th>Priority</th>
-        <th class="text-center">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      @if (DisplayedTasks.Count == 0)
-      {
-        <tr>
-          <td colspan="6" class="text-center text-muted">No tasks found</td>
-        </tr>
-      }
-      else
-      {
-        @foreach (var task in DisplayedTasks)
-        {
-          <tr>
-            <td>@task.ExternalId</td>
-            <td>@task.Title</td>
-            <td>@(task.DueDate?.ToString("MMM dd, yyyy") ?? "-")</td>
-            <td>
-              <span class="badge bg-info">@task.Status</span>
-            </td>
-            <td>
-              <span class="badge @GetPriorityBadgeClass(task.Priority)">@task.Priority</span>
-            </td>
-            <td class="text-center">
-              <button class="btn btn-sm btn-primary" @onclick="() => ShowTaskDetails(task)" title="View details">
-                Details
-              </button>
-            </td>
-          </tr>
-        }
-      }
-    </tbody>
-  </table>
-</div>
+<MudTable Items="DisplayedTasks" Hover="true" Breakpoint="Breakpoint.Sm" Loading="_searching" Dense="true">
+  <HeaderContent>
+    <MudTh>Title</MudTh>
+    <MudTh>Due</MudTh>
+    <MudTh>Status</MudTh>
+    <MudTh>Priority</MudTh>
+    <MudTh Style="text-align:center">Actions</MudTh>
+  </HeaderContent>
+  <RowTemplate>
+    <MudTd DataLabel="Title">@context.Title</MudTd>
+    <MudTd DataLabel="Due">@(context.DueDate?.ToString("MMM dd, yyyy") ?? "—")</MudTd>
+    <MudTd DataLabel="Status">
+      <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@context.Status</MudChip>
+    </MudTd>
+    <MudTd DataLabel="Priority">
+      <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(context.Priority)">@context.Priority</MudChip>
+    </MudTd>
+    <MudTd DataLabel="Actions" Style="text-align:center">
+      <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ShowTaskDetails(context))">
+        Details
+      </MudButton>
+    </MudTd>
+  </RowTemplate>
+  <NoRecordsContent>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">No tasks found</MudText>
+  </NoRecordsContent>
+</MudTable>
 
-<div class="mt-3">
-  <button class="btn btn-secondary" @onclick="OnRefreshClick">Refresh</button>
-</div>
+<MudButton Variant="Variant.Outlined" Color="Color.Secondary" Class="mt-3" OnClick="OnRefreshClick">Refresh</MudButton>
 
-@if (SelectedTask != null)
-{
-  <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Task Details</h5>
-          <button type="button" class="btn-close" @onclick="CloseTaskDetails" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <TaskDetailsComponent
-            TodoItem="SelectedTask"
-            OnEdit="EditTask"
-            OnClose="CloseTaskDetails"
-            OnTaskUpdated="HandleTaskUpdated">
-          </TaskDetailsComponent>
-        </div>
-      </div>
-    </div>
-  </div>
-}
+<MudDialog @bind-Visible="_detailsOpen" Options="_dialogOptions">
+  <TitleContent>
+    <MudText Typo="Typo.h6">Task Details</MudText>
+  </TitleContent>
+  <DialogContent>
+    @if (SelectedTask is not null)
+    {
+      <TaskDetailsComponent TodoItem="SelectedTask"
+                            OnEdit="EditTask"
+                            OnClose="CloseTaskDetails"
+                            OnTaskUpdated="HandleTaskUpdated" />
+    }
+  </DialogContent>
+</MudDialog>
 
-@if (EditingTask != null)
-{
-  <div class="modal d-block" style="background-color: rgba(0,0,0,0.5);" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Edit Task</h5>
-          <button type="button" class="btn-close" @onclick="CloseEditTask" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <EditTaskComponent
-            Task="EditingTask"
-            OnSubmitForm="SaveEditTask"
-            OnCancel="CloseEditTask">
-          </EditTaskComponent>
-        </div>
-      </div>
-    </div>
-  </div>
-}
+<MudDialog @bind-Visible="_editOpen" Options="_dialogOptions">
+  <TitleContent>
+    <MudText Typo="Typo.h6">Edit Task</MudText>
+  </TitleContent>
+  <DialogContent>
+    @if (EditingTask is not null)
+    {
+      <EditTaskComponent Task="EditingTask"
+                         OnSubmitForm="SaveEditTask"
+                         OnCancel="CloseEditTask" />
+    }
+  </DialogContent>
+</MudDialog>
 
 @code {
   private TodoTaskDto? SelectedTask { get; set; }
@@ -137,9 +112,18 @@
   private string _searchText = string.Empty;
   private bool _useSemanticSearch;
   private bool _searching;
+  private bool _detailsOpen;
+  private bool _editOpen;
   private string? _searchError;
   private List<SemanticSearchHitDto>? _semanticResults;
   private long _semanticExecutionMs;
+
+  private readonly DialogOptions _dialogOptions = new()
+  {
+    MaxWidth = MaxWidth.Large,
+    FullWidth = true,
+    CloseButton = true
+  };
 
   [Parameter]
   public List<TodoTaskDto> Tasks { get; set; } = new();
@@ -209,11 +193,22 @@
   private void OnRefreshClick()
   {
     if (OnRefresh.HasDelegate)
-      OnRefresh.InvokeAsync();
+    {
+      _ = OnRefresh.InvokeAsync();
+    }
   }
 
-  private void ShowTaskDetails(TodoTaskDto task) => SelectedTask = task;
-  private void CloseTaskDetails() => SelectedTask = null;
+  private void ShowTaskDetails(TodoTaskDto task)
+  {
+    SelectedTask = task;
+    _detailsOpen = true;
+  }
+
+  private void CloseTaskDetails()
+  {
+    _detailsOpen = false;
+    SelectedTask = null;
+  }
 
   private void HandleTaskUpdated(TodoTaskDto updatedTask)
   {
@@ -223,12 +218,21 @@
 
   private void EditTask()
   {
-    if (SelectedTask == null) return;
+    if (SelectedTask is null)
+    {
+      return;
+    }
+
     EditingTask = SelectedTask;
-    CloseTaskDetails();
+    _detailsOpen = false;
+    _editOpen = true;
   }
 
-  private void CloseEditTask() => EditingTask = null;
+  private void CloseEditTask()
+  {
+    _editOpen = false;
+    EditingTask = null;
+  }
 
   private void SaveEditTask(UpdateTodoTaskCommand command)
   {
@@ -236,11 +240,11 @@
     CloseEditTask();
   }
 
-  private string GetPriorityBadgeClass(string? priority) => priority?.ToUpperInvariant() switch
+  private static Color GetPriorityColor(string? priority) => priority?.ToUpperInvariant() switch
   {
-    "HIGH" => "bg-danger",
-    "MEDIUM" => "bg-warning text-dark",
-    "LOW" => "bg-success",
-    _ => "bg-secondary"
+    "HIGH" => Color.Error,
+    "MEDIUM" => Color.Warning,
+    "LOW" => Color.Success,
+    _ => Color.Default
   };
 }

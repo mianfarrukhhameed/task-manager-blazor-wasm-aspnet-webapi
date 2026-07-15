@@ -5,207 +5,213 @@
 @using Fistix.TaskManager.WebApp.Services.DataServices
 @inject TodoDataService TodoDataService
 
-<h1>AI Task Assistant</h1>
-<p class="text-muted">Ask questions about your workload, propose tool actions, or optimize a sprint.</p>
+<MudText Typo="Typo.h4" GutterBottom="true">AI Task Assistant</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+  Ask questions about your workload, propose tool actions, or optimize a sprint.
+</MudText>
 
-<ul class="nav nav-tabs mb-3">
-  <li class="nav-item">
-    <button class="nav-link @(_mode == "ask" ? "active" : null)" @onclick='() => _mode = "ask"'>Ask (RAG)</button>
-  </li>
-  <li class="nav-item">
-    <button class="nav-link @(_mode == "tools" ? "active" : null)" @onclick='() => _mode = "tools"'>Function calling</button>
-  </li>
-  <li class="nav-item">
-    <button class="nav-link @(_mode == "sprint" ? "active" : null)" @onclick='() => _mode = "sprint"'>Optimize Sprint</button>
-  </li>
-</ul>
+<MudTabs @bind-ActivePanelIndex="_tabIndex" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+  <MudTabPanel Text="Ask (RAG)" Icon="@Icons.Material.Filled.QuestionAnswer">
+    <MudStack Spacing="3" Style="max-width: 40rem;">
+      <MudSelect @bind-Value="_context" Label="Context" Variant="Variant.Outlined">
+        <MudSelectItem Value="@("workload")">workload</MudSelectItem>
+        <MudSelectItem Value="@("week")">week</MudSelectItem>
+        <MudSelectItem Value="@("project")">project</MudSelectItem>
+      </MudSelect>
+      <MudTextField @bind-Value="_question"
+                    Label="Question"
+                    Variant="Variant.Outlined"
+                    Lines="3"
+                    Placeholder="What am I working on this week?" />
+      <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_loading" OnClick="AskAsync">Ask</MudButton>
+    </MudStack>
+  </MudTabPanel>
 
-@if (_mode == "ask")
-{
-  <div class="mb-3">
-    <label class="form-label">Context</label>
-    <select class="form-select" style="max-width: 16rem;" @bind="_context">
-      <option value="workload">workload</option>
-      <option value="week">week</option>
-      <option value="project">project</option>
-    </select>
-  </div>
+  <MudTabPanel Text="Function calling" Icon="@Icons.Material.Filled.Build">
+    <MudStack Spacing="3" Style="max-width: 40rem;">
+      <MudTextField @bind-Value="_toolPrompt"
+                    Label="Prompt"
+                    Variant="Variant.Outlined"
+                    Lines="3"
+                    Placeholder="Create 3 tasks for Q2 planning with high priority" />
+      <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_loading" OnClick="ProposeToolsAsync">
+        Propose tools
+      </MudButton>
 
-  <div class="mb-3">
-    <label class="form-label">Question</label>
-    <textarea class="form-control" rows="3" @bind="_question" placeholder="What am I working on this week?"></textarea>
-  </div>
+      @if (_proposal is not null)
+      {
+        <MudPaper Class="pa-4" Elevation="1">
+          <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">Model: @_proposal.Model</MudText>
+          <MudText Typo="Typo.body2" Class="mb-3">@_proposal.Explanation</MudText>
 
-  <button class="btn btn-primary" disabled="@_loading" @onclick="AskAsync">Ask</button>
-}
-else if (_mode == "tools")
-{
-  <div class="mb-3">
-    <label class="form-label">Prompt</label>
-    <textarea class="form-control" rows="3" @bind="_toolPrompt" placeholder="Create 3 tasks for Q2 planning with high priority"></textarea>
-  </div>
-
-  <button class="btn btn-primary" disabled="@_loading" @onclick="ProposeToolsAsync">Propose tools</button>
-
-  @if (_proposal is not null)
-  {
-    <div class="card mt-4">
-      <div class="card-body">
-        <div class="mb-2 small text-muted">Model: @_proposal.Model</div>
-        <p>@_proposal.Explanation</p>
-
-        @if (_proposal.ProposedCalls.Count == 0)
-        {
-          <div class="text-muted">No tool calls proposed.</div>
-        }
-        else
-        {
-          <div class="fw-semibold mb-2">Proposed calls</div>
-          <ul class="list-group mb-3">
+          @if (_proposal.ProposedCalls.Count == 0)
+          {
+            <MudText Color="Color.Secondary">No tool calls proposed.</MudText>
+          }
+          else
+          {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Proposed calls</MudText>
             @foreach (var call in _proposal.ProposedCalls)
             {
-              <li class="list-group-item">
-                <code>@call.ToolName</code>
-                <pre class="mb-0 mt-2 small">@FormatArgs(call.Arguments)</pre>
-              </li>
+              <MudPaper Class="pa-3 mb-2" Outlined="true">
+                <MudText Typo="Typo.body2"><code>@call.ToolName</code></MudText>
+                <MudText Typo="Typo.caption" Style="white-space: pre-wrap; font-family: monospace;">@FormatArgs(call.Arguments)</MudText>
+              </MudPaper>
             }
-          </ul>
-          <button class="btn btn-success" disabled="@_loading" @onclick="ExecuteToolsAsync">Confirm &amp; execute</button>
-          <button class="btn btn-outline-secondary ms-2" disabled="@_loading" @onclick="ClearProposal">Cancel</button>
-        }
-      </div>
-    </div>
-  }
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+              <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="_loading" OnClick="ExecuteToolsAsync">
+                Confirm &amp; execute
+              </MudButton>
+              <MudButton Variant="Variant.Outlined" Disabled="_loading" OnClick="ClearProposal">Cancel</MudButton>
+            </MudStack>
+          }
+        </MudPaper>
+      }
 
-  @if (_execution is not null)
-  {
-    <div class="card mt-4">
-      <div class="card-body">
-        <div class="fw-semibold mb-2">Execution results</div>
-        <ul class="list-group">
+      @if (_execution is not null)
+      {
+        <MudPaper Class="pa-4" Elevation="1">
+          <MudText Typo="Typo.subtitle2" Class="mb-2">Execution results</MudText>
           @foreach (var result in _execution.Results)
           {
-            <li class="list-group-item">
-              <span class="badge @(result.Success ? "bg-success" : "bg-danger")">@(result.Success ? "ok" : "failed")</span>
-              <code class="ms-2">@result.ToolName</code>
-              <div class="mt-1">@result.Message</div>
+            <MudPaper Class="pa-3 mb-2" Outlined="true">
+              <MudChip T="string" Size="Size.Small" Color="@(result.Success ? Color.Success : Color.Error)">
+                @(result.Success ? "ok" : "failed")
+              </MudChip>
+              <code class="ml-2">@result.ToolName</code>
+              <MudText Typo="Typo.body2" Class="mt-1">@result.Message</MudText>
               @if (!string.IsNullOrWhiteSpace(result.ResultJson))
               {
-                <pre class="mb-0 mt-2 small">@result.ResultJson</pre>
+                <MudText Typo="Typo.caption" Style="white-space: pre-wrap; font-family: monospace;">@result.ResultJson</MudText>
               }
-            </li>
+            </MudPaper>
           }
-        </ul>
-      </div>
-    </div>
-  }
-}
-else
-{
-  <div class="row g-3 mb-3" style="max-width: 40rem;">
-    <div class="col-md-4">
-      <label class="form-label">Max tasks</label>
-      <input class="form-control" type="number" min="1" max="50" @bind="_maxTasks" />
-    </div>
-    <div class="col-md-4">
-      <label class="form-label">Duration (days)</label>
-      <input class="form-control" type="number" min="1" max="90" @bind="_durationDays" />
-    </div>
-    <div class="col-md-4">
-      <label class="form-label">Name (optional)</label>
-      <input class="form-control" @bind="_sprintName" placeholder="Sprint name" />
-    </div>
-  </div>
+        </MudPaper>
+      }
+    </MudStack>
+  </MudTabPanel>
 
-  <button class="btn btn-primary" disabled="@_loading" @onclick="OptimizeSprintAsync">Optimize Sprint</button>
+  <MudTabPanel Text="Optimize Sprint" Icon="@Icons.Material.Filled.AutoAwesome">
+    <MudGrid Spacing="3" Class="mb-4" Style="max-width: 40rem;">
+      <MudItem xs="12" sm="4">
+        <MudNumericField @bind-Value="_maxTasks" Label="Max tasks" Min="1" Max="50" Variant="Variant.Outlined" />
+      </MudItem>
+      <MudItem xs="12" sm="4">
+        <MudNumericField @bind-Value="_durationDays" Label="Duration (days)" Min="1" Max="90" Variant="Variant.Outlined" />
+      </MudItem>
+      <MudItem xs="12" sm="4">
+        <MudTextField @bind-Value="_sprintName" Label="Name (optional)" Variant="Variant.Outlined" Placeholder="Sprint name" />
+      </MudItem>
+    </MudGrid>
 
-  @if (_sprintResult is not null)
-  {
-    <div class="card mt-4">
-      <div class="card-body">
-        <div class="fw-semibold">@_sprintResult.Name</div>
-        <div class="small text-muted mb-2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_loading" OnClick="OptimizeSprintAsync">
+      Optimize Sprint
+    </MudButton>
+
+    @if (_sprintResult is not null)
+    {
+      <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6">@_sprintResult.Name</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
           Sprint id: <code>@_sprintResult.SprintId</code>
           · @_sprintResult.StartDate.ToString("yyyy-MM-dd") – @_sprintResult.EndDate.ToString("yyyy-MM-dd")
-        </div>
-        <a class="btn btn-sm btn-outline-primary mb-3" href="@($"sprints/{_sprintResult.SprintId}")">Open sprint details</a>
+        </MudText>
+
+        <MudButton Href="@($"sprints/{_sprintResult.SprintId}")"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.OpenInNew"
+                   Class="mb-4">
+          Open sprint details
+        </MudButton>
+
         @if (_sprintResult.Steps.Count > 0)
         {
-          <div class="fw-semibold mb-2">Agent steps (Analyst → Planner workflow)</div>
-          <ol class="small mb-3">
+          <MudText Typo="Typo.subtitle2" Class="mb-2">Agent steps (Analyst → Planner)</MudText>
+          <MudTimeline TimelinePosition="TimelinePosition.Start">
             @foreach (var step in _sprintResult.Steps)
             {
-              <li>
-                <code>@step.AgentName</code>/<code>@step.ToolName</code>
+              <MudTimelineItem Color="Color.Primary" Size="Size.Small">
+                <MudText Typo="Typo.body2">
+                  <strong>@step.AgentName</strong> / <code>@step.ToolName</code>
+                </MudText>
                 @if (!string.IsNullOrWhiteSpace(step.Summary))
                 {
-                  <span class="text-muted"> — @step.Summary</span>
+                  <MudText Typo="Typo.caption" Color="Color.Secondary">@step.Summary</MudText>
                 }
-              </li>
+              </MudTimelineItem>
             }
-          </ol>
+          </MudTimeline>
         }
-        <p style="white-space: pre-wrap;">@_sprintResult.Reasoning</p>
+
+        <MudText Typo="Typo.body2" Style="white-space: pre-wrap;" Class="mb-4">@_sprintResult.Reasoning</MudText>
+
         @if (_sprintResult.SelectedTasks.Count == 0)
         {
-          <div class="text-muted">No tasks were selected.</div>
+          <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">No tasks were selected.</MudAlert>
         }
         else
         {
-          <div class="fw-semibold mb-2">Selected tasks (@_sprintResult.SelectedTasks.Count)</div>
-          <ul class="list-group">
+          <MudText Typo="Typo.subtitle2" Class="mb-2">Selected tasks (@_sprintResult.SelectedTasks.Count)</MudText>
+          <MudList T="string" Dense="true">
             @foreach (var task in _sprintResult.SelectedTasks)
             {
-              <li class="list-group-item d-flex justify-content-between align-items-start">
-                <div>
-                  <div>@task.Title</div>
-                  <div class="small text-muted">
-                    @task.Priority · @task.Status
-                    @if (task.DueDate is not null)
-                    {
-                      <span>· due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
-                    }
+              <MudListItem>
+                <MudStack Row="true" Justify="Justify.SpaceBetween" Style="width:100%;">
+                  <div>
+                    <MudText Typo="Typo.body2">@task.Title</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                      @task.Priority · @task.Status
+                      @if (task.DueDate is not null)
+                      {
+                        <span>· due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
+                      }
+                    </MudText>
                   </div>
-                </div>
-                <code class="small">@task.ExternalId</code>
-              </li>
+                  <MudText Typo="Typo.caption"><code>@task.ExternalId</code></MudText>
+                </MudStack>
+              </MudListItem>
             }
-          </ul>
+          </MudList>
         }
-      </div>
-    </div>
-  }
+      </MudPaper>
+    }
+  </MudTabPanel>
+</MudTabs>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
 
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-  <div class="alert alert-danger mt-3">@_error</div>
+  <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
 }
 
 @if (_response is not null)
 {
-  <div class="card mt-4">
-    <div class="card-body">
-      <div class="mb-2 small text-muted">Model: @_response.Model · Context: @_response.Context</div>
-      <p style="white-space: pre-wrap;">@_response.Answer</p>
-      @if (_response.Sources.Count > 0)
-      {
-        <div class="mt-3">
-          <div class="fw-semibold">Sources</div>
-          <ul>
-            @foreach (var source in _response.Sources)
-            {
-              <li><code>@source</code></li>
-            }
-          </ul>
-        </div>
-      }
-    </div>
-  </div>
+  <MudPaper Class="pa-4 mt-4" Elevation="2">
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+      Model: @_response.Model · Context: @_response.Context
+    </MudText>
+    <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">@_response.Answer</MudText>
+    @if (_response.Sources.Count > 0)
+    {
+      <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Sources</MudText>
+      <MudList T="string" Dense="true">
+        @foreach (var source in _response.Sources)
+        {
+          <MudListItem><code>@source</code></MudListItem>
+        }
+      </MudList>
+    }
+  </MudPaper>
 }
 
 @code {
-  private string _mode = "ask";
+  private int _tabIndex;
   private string _question = string.Empty;
   private string _context = "workload";
   private string _toolPrompt = string.Empty;

@@ -2,65 +2,68 @@
 @using Fistix.TaskManager.ViewModel.Dtos
 @using FluentValidation
 
-<h3>Edit Task</h3>
+<MudStack Spacing="3">
+  <EditForm Model="@Command" OnSubmit="HandleSubmit">
+    <MudStack Spacing="3">
+      <MudTextField @bind-Value="Command.Title"
+                    Label="Title"
+                    Variant="Variant.Outlined"
+                    Error="@HasError(nameof(UpdateTodoTaskCommand.Title))"
+                    ErrorText="@GetError(nameof(UpdateTodoTaskCommand.Title))" />
 
-<EditForm Model="@Command" OnSubmit="HandleSubmit">
-  <p>
-    <label>
-      Title:
-      <InputText id="edit-title" @bind-Value="Command.Title" />
-      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.Title))</span>
-    </label>
-  </p>
-  <p>
-    <label>
-      Description:
-      <InputTextArea id="edit-description" @bind-Value="Command.Description" />
-      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.Description))</span>
-    </label>
-  </p>
-  <p>
-    <label>
-      Due Date:
-      <InputDate id="edit-dueDate" @bind-Value="Command.DueDate" />
-      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.DueDate))</span>
-    </label>
-  </p>
-  <p>
-    <label>
-      Priority:
-      <InputSelect id="edit-priority" @bind-Value="Command.Priority" class="form-select">
-        <option value="High">High</option>
-        <option value="Medium">Medium</option>
-        <option value="Low">Low</option>
-      </InputSelect>
-      <span class="validation-message">@GetError(nameof(UpdateTodoTaskCommand.Priority))</span>
-    </label>
-  </p>
-  @if (!string.IsNullOrWhiteSpace(Task.AiSuggestedPriority)
-       && string.Equals(Task.ClassificationStatus, "Completed", StringComparison.OrdinalIgnoreCase))
-  {
-    <p class="text-muted small">
-      AI suggested:
-      <strong>@NormalizeDisplayPriority(Task.AiSuggestedPriority)</strong>
-      @if (Task.AiPriorityConfidence.HasValue)
+      <MudTextField @bind-Value="Command.Description"
+                    Label="Description"
+                    Variant="Variant.Outlined"
+                    Lines="3"
+                    Error="@HasError(nameof(UpdateTodoTaskCommand.Description))"
+                    ErrorText="@GetError(nameof(UpdateTodoTaskCommand.Description))" />
+
+      <MudDatePicker Date="_dueDate"
+                     DateChanged="OnDueDateChanged"
+                     Label="Due Date"
+                     Variant="Variant.Outlined"
+                     Error="@HasError(nameof(UpdateTodoTaskCommand.DueDate))"
+                     ErrorText="@GetError(nameof(UpdateTodoTaskCommand.DueDate))" />
+
+      <MudSelect @bind-Value="Command.Priority"
+                 Label="Priority"
+                 Variant="Variant.Outlined"
+                 Error="@HasError(nameof(UpdateTodoTaskCommand.Priority))"
+                 ErrorText="@GetError(nameof(UpdateTodoTaskCommand.Priority))">
+        <MudSelectItem Value="@("High")">High</MudSelectItem>
+        <MudSelectItem Value="@("Medium")">Medium</MudSelectItem>
+        <MudSelectItem Value="@("Low")">Low</MudSelectItem>
+      </MudSelect>
+
+      @if (!string.IsNullOrWhiteSpace(Task.AiSuggestedPriority)
+           && string.Equals(Task.ClassificationStatus, "Completed", StringComparison.OrdinalIgnoreCase))
       {
-        <span>(@(Math.Round(Task.AiPriorityConfidence.Value * 100))%)</span>
+        <MudAlert Severity="MudBlazor.Severity.Info" Dense="true" Variant="Variant.Outlined">
+          AI suggested: <strong>@NormalizeDisplayPriority(Task.AiSuggestedPriority)</strong>
+          @if (Task.AiPriorityConfidence.HasValue)
+          {
+            <span>(@(Math.Round(Task.AiPriorityConfidence.Value * 100))%)</span>
+          }
+          <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ApplySuggestedPriority" Class="ml-2">
+            Use suggestion
+          </MudButton>
+        </MudAlert>
       }
-      <button type="button" class="btn btn-link btn-sm p-0 ms-1" @onclick="ApplySuggestedPriority">
-        Use suggestion
-      </button>
-    </p>
-  }
-  <button class="btn btn-primary" type="submit">Save</button>
-  <button class="btn btn-secondary ms-2" type="button" @onclick="HandleCancel">Cancel</button>
-</EditForm>
+
+      <MudStack Row="true" Spacing="2">
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="HandleCancel">Cancel</MudButton>
+      </MudStack>
+    </MudStack>
+  </EditForm>
+</MudStack>
 
 @code {
     [Inject]
     private IValidator<UpdateTodoTaskCommand> Validator { get; set; } = default!;
 
     private UpdateTodoTaskCommand Command { get; set; } = new();
+    private DateTime? _dueDate;
     private Dictionary<string, string> _errors = new();
 
     [Parameter]
@@ -82,16 +85,17 @@
             DueDate = Task.DueDate ?? DateTime.Today.AddDays(1),
             Priority = NormalizeDisplayPriority(Task.Priority)
         };
+        _dueDate = Command.DueDate;
         _errors.Clear();
     }
+
+    private bool HasError(string field) => _errors.ContainsKey(field);
 
     private string GetError(string field) =>
         _errors.TryGetValue(field, out var message) ? message : string.Empty;
 
-    private void ApplySuggestedPriority()
-    {
+    private void ApplySuggestedPriority() =>
         Command.Priority = NormalizeDisplayPriority(Task.AiSuggestedPriority);
-    }
 
     private static string NormalizeDisplayPriority(string? priority) =>
         priority?.Trim().ToUpperInvariant() switch
@@ -105,6 +109,11 @@
     private async Task HandleSubmit()
     {
         _errors.Clear();
+        if (_dueDate.HasValue)
+        {
+            Command.DueDate = _dueDate.Value;
+        }
+
         var result = await Validator.ValidateAsync(Command);
         if (!result.IsValid)
         {
@@ -119,8 +128,7 @@
         await OnSubmitForm.InvokeAsync(Command);
     }
 
-    private async Task HandleCancel()
-    {
-        await OnCancel.InvokeAsync();
-    }
+    private async Task HandleCancel() => await OnCancel.InvokeAsync();
+
+    private void OnDueDateChanged(DateTime? date) => _dueDate = date;
 }

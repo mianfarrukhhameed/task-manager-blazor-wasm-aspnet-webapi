@@ -4,138 +4,133 @@
 @using Microsoft.Extensions.Logging
 @implements IAsyncDisposable
 
-<div class="task-details card">
-    <div class="card-header">
-        <h3>@TodoItem.Title</h3>
-    </div>
-    <div class="card-body">
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <p><strong>Status:</strong> <span class="badge bg-info">@TodoItem.Status</span></p>
-                <p><strong>Priority:</strong> <span class="badge bg-warning">@TodoItem.Priority</span></p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Due Date:</strong> @(TodoItem.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")</p>
-                <p><strong>Assigned To:</strong> @(TodoItem.AssignedTo ?? "Unassigned")</p>
-            </div>
-        </div>
+<MudStack Spacing="3">
+  <MudText Typo="Typo.h5">@TodoItem.Title</MudText>
 
-        <div class="mb-3">
-            <h5>Description</h5>
-            <p>@TodoItem.Description</p>
-        </div>
+  <MudGrid>
+    <MudItem xs="12" sm="6">
+      <MudText Typo="Typo.body2"><strong>Status:</strong></MudText>
+      <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-1">@TodoItem.Status</MudChip>
+      <MudText Typo="Typo.body2" Class="mt-2"><strong>Priority:</strong></MudText>
+      <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(TodoItem.Priority)" Class="ml-1">@TodoItem.Priority</MudChip>
+    </MudItem>
+    <MudItem xs="12" sm="6">
+      <MudText Typo="Typo.body2"><strong>Due:</strong> @(TodoItem.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")</MudText>
+      <MudText Typo="Typo.body2" Class="mt-2"><strong>Assigned:</strong> @(TodoItem.AssignedTo ?? "Unassigned")</MudText>
+    </MudItem>
+  </MudGrid>
 
-        <div class="ai-summary-section border rounded p-3 mb-3" style="background-color: #f8f9fa;">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">
-                    <span class="badge bg-success">AI</span> Summary
-                </h5>
-                <div>
-                    @if (!string.IsNullOrEmpty(Summary) && !IsLoading)
-                    {
-                        <button class="btn btn-sm btn-outline-primary" @onclick="RegenerateSummary" title="Regenerate summary">
-                            Refresh
-                        </button>
-                    }
-                </div>
-            </div>
+  <MudText Typo="Typo.subtitle2">Description</MudText>
+  <MudText Typo="Typo.body2">@TodoItem.Description</MudText>
 
-            @if (IsLoading)
-            {
-                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <span class="ms-2">Generating AI summary...</span>
-            }
-            else if (!string.IsNullOrEmpty(ErrorMessage))
-            {
-                <div class="alert alert-warning mb-0">
-                    <strong>Could not generate summary:</strong> @ErrorMessage
-                    <button class="btn btn-sm btn-outline-warning ms-2" @onclick="GenerateSummary">Try Again</button>
-                </div>
-            }
-            else if (!string.IsNullOrEmpty(Summary))
-            {
-                <p class="mb-2">@Summary</p>
-                <small class="text-muted">
-                    Generated: @(SummaryGeneratedAt?.ToString("g") ?? "Unknown") |
-                    Model: @(SummaryModel ?? "Unknown")@(FromCache ? " | Cached" : "")
-                </small>
-            }
-            else
-            {
-                <p class="text-muted mb-0">
-                    No AI summary generated yet.
-                    <button class="btn btn-sm btn-link p-0" @onclick="GenerateSummary">Generate summary</button>
-                </p>
-            }
-        </div>
+  <MudPaper Class="pa-3" Elevation="0" Outlined="true" Style="border-left: 4px solid var(--mud-palette-success);">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+      <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudChip T="string" Size="Size.Small" Color="Color.Success">AI</MudChip>
+        <MudText Typo="Typo.subtitle1">Summary</MudText>
+      </MudStack>
+      @if (!string.IsNullOrEmpty(Summary) && !IsLoading)
+      {
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RegenerateSummary" Title="Regenerate" />
+      }
+    </MudStack>
 
-        <div class="ai-priority-section border rounded p-3 mb-3" style="background-color: #f8f9fa;">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">
-                    <span class="badge bg-primary">AI</span> Priority Suggestion
-                </h5>
-                @if (Classification?.Status == "Failed")
-                {
-                    <button class="btn btn-sm btn-outline-primary" @onclick="RetryClassification">Try Again</button>
-                }
-            </div>
+    @if (IsLoading)
+    {
+      <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+        <MudText Typo="Typo.body2">Generating AI summary…</MudText>
+      </MudStack>
+    }
+    else if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+      <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-0">
+        @ErrorMessage
+        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="GenerateSummary" Class="ml-2">Try again</MudButton>
+      </MudAlert>
+    }
+    else if (!string.IsNullOrEmpty(Summary))
+    {
+      <MudText Typo="Typo.body2">@Summary</MudText>
+      <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+        Generated: @(SummaryGeneratedAt?.ToString("g") ?? "Unknown") · Model: @(SummaryModel ?? "Unknown")@(FromCache ? " · Cached" : "")
+      </MudText>
+    }
+    else
+    {
+      <MudText Typo="Typo.body2" Color="Color.Secondary">
+        No AI summary yet.
+        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="GenerateSummary">Generate</MudButton>
+      </MudText>
+    }
+  </MudPaper>
 
-            @if (IsClassifying)
-            {
-                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <span class="ms-2">Analyzing priority...</span>
-            }
-            else if (!string.IsNullOrEmpty(ClassificationError))
-            {
-                <div class="alert alert-warning mb-0">
-                    <strong>Could not classify priority:</strong> @ClassificationError
-                </div>
-            }
-            else if (Classification?.Status == "Completed" && !string.IsNullOrWhiteSpace(Classification.SuggestedPriority))
-            {
-                <p class="mb-2">
-                    Suggested:
-                    <span class="badge @GetPriorityBadgeClass(Classification.SuggestedPriority)">@Classification.SuggestedPriority</span>
-                    @if (Classification.Confidence.HasValue)
-                    {
-                        <span class="text-muted">(@(Math.Round(Classification.Confidence.Value * 100))% confidence)</span>
-                    }
-                </p>
-                @if (!string.IsNullOrWhiteSpace(Classification.Reason))
-                {
-                    <p class="mb-2 text-muted">@Classification.Reason</p>
-                }
-                @if (ShouldShowApplyButton())
-                {
-                    <button class="btn btn-sm btn-primary" @onclick="ApplySuggestedPriority" disabled="@IsApplyingPriority">
-                        Apply @Classification.SuggestedPriority
-                    </button>
-                }
-                else if (Classification.Confidence is >= 0.60f and < 0.85f)
-                {
-                    <small class="text-muted">Recommended — review before applying.</small>
-                }
-            }
-            else if (Classification?.Status == "Pending")
-            {
-                <p class="text-muted mb-0">Priority analysis is in progress...</p>
-            }
-            else
-            {
-                <p class="text-muted mb-0">No AI priority suggestion available yet.</p>
-            }
-        </div>
+  <MudPaper Class="pa-3" Elevation="0" Outlined="true" Style="border-left: 4px solid var(--mud-palette-primary);">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+      <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudChip T="string" Size="Size.Small" Color="Color.Primary">AI</MudChip>
+        <MudText Typo="Typo.subtitle1">Priority suggestion</MudText>
+      </MudStack>
+      @if (Classification?.Status == "Failed")
+      {
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="RetryClassification">Retry</MudButton>
+      }
+    </MudStack>
 
-        <div>
-            <button class="btn btn-primary" @onclick="HandleEdit">Edit</button>
-            <button class="btn btn-secondary" @onclick="HandleClose">Close</button>
-        </div>
-    </div>
-</div>
+    @if (IsClassifying)
+    {
+      <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+        <MudText Typo="Typo.body2">Analyzing priority…</MudText>
+      </MudStack>
+    }
+    else if (!string.IsNullOrEmpty(ClassificationError))
+    {
+      <MudAlert Severity="Severity.Warning" Dense="true">@ClassificationError</MudAlert>
+    }
+    else if (Classification?.Status == "Completed" && !string.IsNullOrWhiteSpace(Classification.SuggestedPriority))
+    {
+      <MudText Typo="Typo.body2">
+        Suggested:
+        <MudChip T="string" Size="Size.Small" Color="@GetPriorityColor(Classification.SuggestedPriority)" Class="ml-1">
+          @Classification.SuggestedPriority
+        </MudChip>
+        @if (Classification.Confidence.HasValue)
+        {
+          <span class="mud-text-secondary">(@(Math.Round(Classification.Confidence.Value * 100))% confidence)</span>
+        }
+      </MudText>
+      @if (!string.IsNullOrWhiteSpace(Classification.Reason))
+      {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">@Classification.Reason</MudText>
+      }
+      @if (ShouldShowApplyButton())
+      {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-2"
+                   OnClick="ApplySuggestedPriority" Disabled="IsApplyingPriority">
+          Apply @Classification.SuggestedPriority
+        </MudButton>
+      }
+      else if (Classification.Confidence is >= 0.60f and < 0.85f)
+      {
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Recommended — review before applying.</MudText>
+      }
+    }
+    else if (Classification?.Status == "Pending")
+    {
+      <MudText Typo="Typo.body2" Color="Color.Secondary">Priority analysis in progress…</MudText>
+    }
+    else
+    {
+      <MudText Typo="Typo.body2" Color="Color.Secondary">No AI priority suggestion yet.</MudText>
+    }
+  </MudPaper>
+
+  <MudStack Row="true" Spacing="2">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="HandleEdit">Edit</MudButton>
+    <MudButton Variant="Variant.Outlined" OnClick="HandleClose">Close</MudButton>
+  </MudStack>
+</MudStack>
 
 @code {
     private string? Summary { get; set; }
@@ -374,33 +369,21 @@
             _ => priority?.ToUpperInvariant() ?? string.Empty
         };
 
-    private static string GetPriorityBadgeClass(string? priority) => priority?.ToUpperInvariant() switch
+    private static Color GetPriorityColor(string? priority) => priority?.ToUpperInvariant() switch
     {
-        "HIGH" => "bg-danger",
-        "MEDIUM" => "bg-warning text-dark",
-        "LOW" => "bg-success",
-        _ => "bg-secondary"
+        "HIGH" => Color.Error,
+        "MEDIUM" => Color.Warning,
+        "LOW" => Color.Success,
+        _ => Color.Default
     };
 
-    private async System.Threading.Tasks.Task HandleEdit()
-    {
-        await OnEdit.InvokeAsync();
-    }
+    private async System.Threading.Tasks.Task HandleEdit() => await OnEdit.InvokeAsync();
 
-    private async System.Threading.Tasks.Task HandleClose()
-    {
-        await OnClose.InvokeAsync();
-    }
+    private async System.Threading.Tasks.Task HandleClose() => await OnClose.InvokeAsync();
 
-    private async System.Threading.Tasks.Task GenerateSummary()
-    {
-        await GenerateSummaryInternal(force: false);
-    }
+    private async System.Threading.Tasks.Task GenerateSummary() => await GenerateSummaryInternal(force: false);
 
-    private async System.Threading.Tasks.Task RegenerateSummary()
-    {
-        await GenerateSummaryInternal(force: true);
-    }
+    private async System.Threading.Tasks.Task RegenerateSummary() => await GenerateSummaryInternal(force: true);
 
     private async System.Threading.Tasks.Task GenerateSummaryInternal(bool force)
     {
@@ -451,32 +434,3 @@
         }
     }
 }
-
-<style>
-    .ai-summary-section {
-        border-left: 4px solid #28a745 !important;
-    }
-
-    .ai-priority-section {
-        border-left: 4px solid #0d6efd !important;
-    }
-
-    .task-details {
-        margin: 20px 0;
-    }
-
-    .task-details .card-header {
-        background-color: #f8f9fa;
-        border-bottom: 2px solid #dee2e6;
-    }
-
-    .task-details .card-body {
-        padding: 1.5rem;
-    }
-
-    .spinner-border-sm {
-        width: 1rem;
-        height: 1rem;
-        border-width: 0.2em;
-    }
-</style>

@@ -6,58 +6,61 @@
 
 @inject TodoDataService TodoDataService
 
-<h1>Sprints</h1>
-<p class="text-muted">Sprints created by the AI sprint optimizer (and any saved sprint plans).</p>
+<MudText Typo="Typo.h4" GutterBottom="true">Sprints</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+  Sprints created by the AI sprint optimizer.
+</MudText>
 
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-  <div class="alert alert-warning">@_error</div>
+  <MudAlert Severity="Severity.Warning" Class="mb-4">@_error</MudAlert>
 }
 
-<div class="mb-3">
-  <button class="btn btn-outline-secondary btn-sm" disabled="@_loading" @onclick="LoadAsync">Refresh</button>
-  <a class="btn btn-primary btn-sm ms-2" href="ai-chat">Optimize a sprint</a>
-</div>
+<MudStack Row="true" Spacing="2" Class="mb-4">
+  <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" OnClick="LoadAsync">
+    Refresh
+  </MudButton>
+  <MudButton Href="ai-chat" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AutoAwesome">
+    Optimize a sprint
+  </MudButton>
+</MudStack>
 
 @if (_loading && _sprints.Count == 0)
 {
-  <div class="text-muted">Loading sprints…</div>
+  <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
 }
 else if (_sprints.Count == 0)
 {
-  <div class="text-muted">No sprints yet. Use AI Chat → Optimize Sprint to create one.</div>
+  <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+    No sprints yet. Use AI Chat → Optimize Sprint to create one.
+  </MudAlert>
 }
 else
 {
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Dates</th>
-          <th>Tasks</th>
-          <th>Created</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @foreach (var sprint in _sprints)
-        {
-          <tr>
-            <td>@sprint.Name</td>
-            <td class="small text-muted">
-              @sprint.StartDate.ToString("yyyy-MM-dd") – @sprint.EndDate.ToString("yyyy-MM-dd")
-            </td>
-            <td>@sprint.Tasks.Count</td>
-            <td class="small text-muted">@sprint.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" href="@($"sprints/{sprint.ExternalId}")">View</a>
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
+  <MudTable Items="_sprints" Hover="true" Breakpoint="Breakpoint.Sm" Loading="_loading" OnRowClick="OnRowClick" T="SprintDto">
+    <HeaderContent>
+      <MudTh>Name</MudTh>
+      <MudTh>Dates</MudTh>
+      <MudTh>Tasks</MudTh>
+      <MudTh>Created</MudTh>
+      <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+      <MudTd DataLabel="Name">@context.Name</MudTd>
+      <MudTd DataLabel="Dates">
+        <MudText Typo="Typo.caption">@context.StartDate.ToString("yyyy-MM-dd") – @context.EndDate.ToString("yyyy-MM-dd")</MudText>
+      </MudTd>
+      <MudTd DataLabel="Tasks">@context.Tasks.Count</MudTd>
+      <MudTd DataLabel="Created">
+        <MudText Typo="Typo.caption">@context.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</MudText>
+      </MudTd>
+      <MudTd>
+        <MudButton Href="@($"sprints/{context.ExternalId}")" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">
+          View
+        </MudButton>
+      </MudTd>
+    </RowTemplate>
+  </MudTable>
 }
 
 @code {
@@ -65,10 +68,10 @@ else
   private string? _error;
   private bool _loading;
 
-  protected override async Task OnInitializedAsync()
-  {
-    await LoadAsync();
-  }
+  [Inject]
+  private NavigationManager Navigation { get; set; } = default!;
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
 
   private async Task LoadAsync()
   {
@@ -90,6 +93,14 @@ else
     finally
     {
       _loading = false;
+    }
+  }
+
+  private void OnRowClick(TableRowClickEventArgs<SprintDto> args)
+  {
+    if (args.Item is not null)
+    {
+      Navigation.NavigateTo($"sprints/{args.Item.ExternalId}");
     }
   }
 }
