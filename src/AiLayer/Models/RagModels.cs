@@ -6,8 +6,6 @@ public sealed class RagPipelineRequest
 {
     public string Question { get; set; } = string.Empty;
     public string Context { get; set; } = "workload";
-    public Guid? OwnerExternalId { get; set; }
-    public int TopK { get; set; } = 10;
     public IReadOnlyList<RagSourceTodo> SourceTodos { get; set; } = Array.Empty<RagSourceTodo>();
 }
 

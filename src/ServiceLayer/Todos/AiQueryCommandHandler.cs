@@ -102,9 +102,7 @@ public class AiQueryCommandHandler : IRequestHandler<AiQueryCommand, AiQueryComm
         {
             Question = command.Question,
             Context = context,
-            OwnerExternalId = isAdmin ? null : userId,
-            SourceTodos = sources,
-            TopK = 10
+            SourceTodos = sources
         }, cancellationToken);
 
         await _conversationRepository.AddAsync(new AiConversation

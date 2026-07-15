@@ -190,9 +190,20 @@ public class SemanticKernelLlmProvider : ILlmProviderService
 
     public async Task<string> GetCompletionAsync(string prompt, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            throw new ArgumentException("Prompt is required.", nameof(prompt));
+        }
+
         var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>();
+
+        // ChatHistory(string) treats the text as a *system* message only.
+        // Google Gemini (and some other providers) reject histories with only system messages.
+        var history = new ChatHistory();
+        history.AddUserMessage(prompt);
+
         var response = await chatCompletionService.GetChatMessageContentAsync(
-            new ChatHistory(prompt),
+            history,
             kernel: _kernel,
             cancellationToken: cancellationToken);
 
