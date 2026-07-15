@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -33,6 +34,14 @@ public sealed class TaskManagerApiClient
         return body?.Payload ?? [];
     }
 
+    public async Task<TodoItem> GetTodoAsync(Guid externalId, CancellationToken cancellationToken = default)
+    {
+        var todos = await GetTodosAsync(cancellationToken);
+        var todo = todos.FirstOrDefault(t => t.ExternalId == externalId);
+        return todo
+            ?? throw new InvalidOperationException($"Todo '{externalId}' was not found for the authenticated user.");
+    }
+
     public async Task<TodoItem> CreateTodoAsync(
         string title,
         string description,
@@ -54,21 +63,24 @@ public sealed class TaskManagerApiClient
     }
 
     public async Task<TodoItem> UpdateTodoAsync(
-        TodoItem todo,
+        Guid externalId,
+        string title,
+        string description,
+        DateTime dueDate,
         string priority,
         CancellationToken cancellationToken = default)
     {
         var request = new UpdateTodoRequest
         {
-            ExternalId = todo.ExternalId,
-            Title = todo.Title ?? string.Empty,
-            Description = todo.Description ?? string.Empty,
-            DueDate = todo.DueDate ?? DateTime.UtcNow.Date,
+            ExternalId = externalId,
+            Title = title,
+            Description = description,
+            DueDate = dueDate,
             Priority = priority
         };
 
         using var response = await _httpClient.PutAsJsonAsync(
-            $"api/todos/{todo.ExternalId}",
+            $"api/todos/{externalId}",
             request,
             JsonOptions,
             cancellationToken);
@@ -78,7 +90,7 @@ public sealed class TaskManagerApiClient
         return updated ?? throw new InvalidOperationException("Update todo returned an empty body.");
     }
 
-    public async Task<SemanticSearchResponse?> TrySemanticSearchAsync(
+    public async Task<SemanticSearchAttempt> TrySemanticSearchAsync(
         string query,
         int limit = 10,
         CancellationToken cancellationToken = default)
@@ -91,15 +103,21 @@ public sealed class TaskManagerApiClient
             JsonOptions,
             cancellationToken);
 
-        if (response.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable
-            or System.Net.HttpStatusCode.NotFound
-            or System.Net.HttpStatusCode.BadRequest)
+        // Only soft-fallback when the feature is unavailable or rate-limited.
+        // Validation/auth errors (400/401/403) propagate as tool errors.
+        if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
         {
-            return null;
+            return new SemanticSearchAttempt { SoftFallback = true };
+        }
+
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            return new SemanticSearchAttempt { SoftFallback = true, RateLimited = true };
         }
 
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<SemanticSearchResponse>(JsonOptions, cancellationToken);
+        var payload = await response.Content.ReadFromJsonAsync<SemanticSearchResponse>(JsonOptions, cancellationToken);
+        return new SemanticSearchAttempt { Response = payload };
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)

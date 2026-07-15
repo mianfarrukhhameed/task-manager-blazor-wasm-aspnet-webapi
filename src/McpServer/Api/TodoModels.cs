@@ -106,3 +106,13 @@ public sealed class SemanticSearchHit
     [JsonPropertyName("similarity")]
     public double Similarity { get; set; }
 }
+
+/// <summary>
+/// Result of attempting semantic search. SoftFallback means the caller should use keyword search.
+/// </summary>
+public sealed class SemanticSearchAttempt
+{
+    public SemanticSearchResponse? Response { get; init; }
+    public bool SoftFallback { get; init; }
+    public bool RateLimited { get; init; }
+}

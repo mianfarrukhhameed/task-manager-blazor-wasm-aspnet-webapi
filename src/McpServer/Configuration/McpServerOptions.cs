@@ -7,7 +7,8 @@ namespace Fistix.TaskManager.McpServer.Configuration;
 /// </summary>
 public sealed class McpServerOptions
 {
-    public const string DefaultApiUrl = "https://localhost:5001";
+    // Prefer HTTP for Claude Desktop — ASP.NET Core HTTPS dev certs are often untrusted by the client process.
+    public const string DefaultApiUrl = "http://localhost:5000";
 
     public string ApiUrl { get; init; } = DefaultApiUrl;
     public string AccessToken { get; init; } = string.Empty;

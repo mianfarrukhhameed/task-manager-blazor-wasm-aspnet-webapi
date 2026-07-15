@@ -18,7 +18,10 @@ builder.Logging.AddConsole(console =>
 });
 
 builder.Services.AddSingleton(options);
-builder.Services.AddHttpClient<TaskManagerApiClient>();
+builder.Services.AddHttpClient<TaskManagerApiClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 builder.Services
     .AddMcpServer()
