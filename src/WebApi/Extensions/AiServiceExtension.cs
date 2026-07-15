@@ -34,6 +34,7 @@ public static class AiServiceExtension
         services.AddScoped<SummarizationPipeline>();
         services.AddScoped<ClassificationPipeline>();
         services.AddScoped<SemanticSearchPipeline>();
+        services.AddScoped<RAGPipeline>();
         services.AddHttpClient(nameof(SemanticKernelEmbeddingService));
 
         var embeddingProvider = configuration["Ai:Embedding:Provider"] ?? "Onnx";

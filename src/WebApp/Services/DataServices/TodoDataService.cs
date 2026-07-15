@@ -175,5 +175,29 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<AiQueryResponseDto>> AiQuery(string question, string context = "workload")
+    {
+      var result = new ApiCallResult<AiQueryResponseDto>();
+      var command = new AiQueryCommand
+      {
+        Question = question,
+        Context = context
+      };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/query", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<AiQueryResponseDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }

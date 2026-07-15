@@ -243,4 +243,50 @@ public class AiController : ControllerBase
             return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to run semantic search");
         }
     }
+
+    /// <summary>
+    /// Answers a natural-language question about the user's tasks using RAG.
+    /// </summary>
+    [HttpPost("query")]
+    [EnableRateLimiting(RateLimitPolicies.AiRag)]
+    [ProducesResponseType(typeof(AiQueryResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<AiQueryResponseDto>> Query([FromBody] AiQueryCommand command)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI query is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running AI query");
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to answer AI query");
+        }
+    }
 }

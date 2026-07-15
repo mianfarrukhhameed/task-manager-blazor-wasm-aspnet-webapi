@@ -13,6 +13,7 @@ namespace Fistix.TaskManager.DataLayer
     public DbSet<UserProfile> UserProfiles { get; set; }
     public DbSet<TodoAiMetadata> TodoAiMetadatas { get; set; }
     public DbSet<TodoEmbedding> TodoEmbeddings { get; set; }
+    public DbSet<AiConversation> AiConversations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,6 +25,7 @@ namespace Fistix.TaskManager.DataLayer
       UserProfileModelConfig(modelBuilder);
       TodoAiMetadataModelConfig(modelBuilder);
       TodoEmbeddingModelConfig(modelBuilder);
+      AiConversationModelConfig(modelBuilder);
     }
 
     private void TodoTaskModelConfig(ModelBuilder modelBuilder)
@@ -83,6 +85,20 @@ namespace Fistix.TaskManager.DataLayer
           .WithMany()
           .HasForeignKey(e => e.TodoId)
           .OnDelete(DeleteBehavior.Cascade);
+      });
+    }
+
+    private void AiConversationModelConfig(ModelBuilder modelBuilder)
+    {
+      modelBuilder.Entity<AiConversation>(entityModel =>
+      {
+        entityModel.ToTable("AiConversations");
+        entityModel.HasKey(k => k.Id);
+        entityModel.Property(p => p.UserId).HasMaxLength(256).IsRequired();
+        entityModel.Property(p => p.Context).HasMaxLength(50);
+        entityModel.Property(p => p.Model).HasMaxLength(100);
+        entityModel.HasIndex(p => p.UserId);
+        entityModel.HasIndex(p => p.CreatedAt);
       });
     }
   }
