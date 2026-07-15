@@ -6,7 +6,7 @@
 @inject TodoDataService TodoDataService
 
 <h1>AI Task Assistant</h1>
-<p class="text-muted">Ask questions about your workload, or propose tool actions and confirm before they run.</p>
+<p class="text-muted">Ask questions about your workload, propose tool actions, or optimize a sprint.</p>
 
 <ul class="nav nav-tabs mb-3">
   <li class="nav-item">
@@ -14,6 +14,9 @@
   </li>
   <li class="nav-item">
     <button class="nav-link @(_mode == "tools" ? "active" : null)" @onclick='() => _mode = "tools"'>Function calling</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link @(_mode == "sprint" ? "active" : null)" @onclick='() => _mode = "sprint"'>Optimize Sprint</button>
   </li>
 </ul>
 
@@ -35,7 +38,7 @@
 
   <button class="btn btn-primary" disabled="@_loading" @onclick="AskAsync">Ask</button>
 }
-else
+else if (_mode == "tools")
 {
   <div class="mb-3">
     <label class="form-label">Prompt</label>
@@ -97,6 +100,65 @@ else
     </div>
   }
 }
+else
+{
+  <div class="row g-3 mb-3" style="max-width: 40rem;">
+    <div class="col-md-4">
+      <label class="form-label">Max tasks</label>
+      <input class="form-control" type="number" min="1" max="50" @bind="_maxTasks" />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Duration (days)</label>
+      <input class="form-control" type="number" min="1" max="90" @bind="_durationDays" />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Name (optional)</label>
+      <input class="form-control" @bind="_sprintName" placeholder="Sprint name" />
+    </div>
+  </div>
+
+  <button class="btn btn-primary" disabled="@_loading" @onclick="OptimizeSprintAsync">Optimize Sprint</button>
+
+  @if (_sprintResult is not null)
+  {
+    <div class="card mt-4">
+      <div class="card-body">
+        <div class="fw-semibold">@_sprintResult.Name</div>
+        <div class="small text-muted mb-2">
+          Sprint id: <code>@_sprintResult.SprintId</code>
+          · @_sprintResult.StartDate.ToString("yyyy-MM-dd") – @_sprintResult.EndDate.ToString("yyyy-MM-dd")
+        </div>
+        <p style="white-space: pre-wrap;">@_sprintResult.Reasoning</p>
+        @if (_sprintResult.SelectedTasks.Count == 0)
+        {
+          <div class="text-muted">No tasks were selected.</div>
+        }
+        else
+        {
+          <div class="fw-semibold mb-2">Selected tasks (@_sprintResult.SelectedTasks.Count)</div>
+          <ul class="list-group">
+            @foreach (var task in _sprintResult.SelectedTasks)
+            {
+              <li class="list-group-item d-flex justify-content-between align-items-start">
+                <div>
+                  <div>@task.Title</div>
+                  <div class="small text-muted">
+                    @task.Priority · @task.Status
+                    @if (task.DueDate is not null)
+                    {
+                      <span>· due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
+                    }
+                  </div>
+                </div>
+                <code class="small">@task.ExternalId</code>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  }
+}
 
 @if (!string.IsNullOrWhiteSpace(_error))
 {
@@ -130,11 +192,15 @@ else
   private string _question = string.Empty;
   private string _context = "workload";
   private string _toolPrompt = string.Empty;
+  private int _maxTasks = 12;
+  private int _durationDays = 14;
+  private string _sprintName = string.Empty;
   private bool _loading;
   private string? _error;
   private AiQueryResponseDto? _response;
   private ProposeAiToolsResponseDto? _proposal;
   private ExecuteAiToolsResponseDto? _execution;
+  private OptimizeSprintResponseDto? _sprintResult;
 
   private async Task AskAsync()
   {
@@ -142,6 +208,7 @@ else
     _response = null;
     _proposal = null;
     _execution = null;
+    _sprintResult = null;
     if (string.IsNullOrWhiteSpace(_question))
     {
       _error = "Enter a question.";
@@ -172,6 +239,7 @@ else
     _response = null;
     _proposal = null;
     _execution = null;
+    _sprintResult = null;
     if (string.IsNullOrWhiteSpace(_toolPrompt))
     {
       _error = "Enter a prompt.";
@@ -216,6 +284,34 @@ else
       }
 
       _execution = result.Payload;
+    }
+    finally
+    {
+      _loading = false;
+    }
+  }
+
+  private async Task OptimizeSprintAsync()
+  {
+    _error = null;
+    _response = null;
+    _proposal = null;
+    _execution = null;
+    _sprintResult = null;
+    _loading = true;
+    try
+    {
+      var result = await TodoDataService.OptimizeSprint(
+        _maxTasks,
+        _durationDays,
+        string.IsNullOrWhiteSpace(_sprintName) ? null : _sprintName.Trim());
+      if (!result.IsSucceed || result.Payload is null)
+      {
+        _error = result.Message ?? "Sprint optimization failed.";
+        return;
+      }
+
+      _sprintResult = result.Payload;
     }
     finally
     {
