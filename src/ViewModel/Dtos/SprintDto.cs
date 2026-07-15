@@ -14,6 +14,7 @@ public class SprintDto
     public DateTime CreatedAt { get; set; }
     public string? Reasoning { get; set; }
     public List<Guid> TodoExternalIds { get; set; } = new();
+    public List<SprintTaskSummaryDto> Tasks { get; set; } = new();
 }
 
 public class SprintTaskSummaryDto

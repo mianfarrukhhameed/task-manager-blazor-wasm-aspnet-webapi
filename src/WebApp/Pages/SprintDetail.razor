@@ -1,0 +1,99 @@
+@page "/sprints/{ExternalId:guid}"
+@attribute [Authorize]
+
+@using Fistix.TaskManager.ViewModel.Dtos
+@using Fistix.TaskManager.WebApp.Services.DataServices
+
+@inject TodoDataService TodoDataService
+
+<div class="mb-3">
+  <a href="sprints">&larr; All sprints</a>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+  <div class="alert alert-warning">@_error</div>
+}
+else if (_loading || _sprint is null)
+{
+  <div class="text-muted">Loading sprint…</div>
+}
+else
+{
+  <h1>@_sprint.Name</h1>
+  <div class="small text-muted mb-3">
+    @_sprint.StartDate.ToString("yyyy-MM-dd") – @_sprint.EndDate.ToString("yyyy-MM-dd")
+    · created @_sprint.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
+    · <code>@_sprint.ExternalId</code>
+  </div>
+
+  @if (!string.IsNullOrWhiteSpace(_sprint.Reasoning))
+  {
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Optimizer reasoning</div>
+      <div class="card-body" style="white-space: pre-wrap;">@_sprint.Reasoning</div>
+    </div>
+  }
+
+  <h2 class="h5">Selected tasks (@_sprint.Tasks.Count)</h2>
+  @if (_sprint.Tasks.Count == 0)
+  {
+    <div class="text-muted">No tasks linked to this sprint.</div>
+  }
+  else
+  {
+    <ul class="list-group">
+      @foreach (var task in _sprint.Tasks)
+      {
+        <li class="list-group-item d-flex justify-content-between align-items-start">
+          <div>
+            <div>@task.Title</div>
+            <div class="small text-muted">
+              @task.Priority · @task.Status
+              @if (!string.IsNullOrWhiteSpace(task.Category))
+              {
+                <span>· @task.Category</span>
+              }
+              @if (task.DueDate is not null)
+              {
+                <span>· due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
+              }
+            </div>
+          </div>
+          <a class="small" href="todo">Todo board</a>
+        </li>
+      }
+    </ul>
+  }
+}
+
+@code {
+  [Parameter] public Guid ExternalId { get; set; }
+
+  private SprintDto? _sprint;
+  private string? _error;
+  private bool _loading = true;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    _loading = true;
+    _error = null;
+    _sprint = null;
+    try
+    {
+      var result = await TodoDataService.GetSprint(ExternalId);
+      if (result.IsSucceed && result.Payload is not null)
+      {
+        _sprint = result.Payload;
+      }
+      else
+      {
+        _error = result.Message ?? "Sprint not found.";
+      }
+    }
+    finally
+    {
+      _loading = false;
+    }
+  }
+}

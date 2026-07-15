@@ -1,0 +1,95 @@
+@page "/sprints"
+@attribute [Authorize]
+
+@using Fistix.TaskManager.ViewModel.Dtos
+@using Fistix.TaskManager.WebApp.Services.DataServices
+
+@inject TodoDataService TodoDataService
+
+<h1>Sprints</h1>
+<p class="text-muted">Sprints created by the AI sprint optimizer (and any saved sprint plans).</p>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+  <div class="alert alert-warning">@_error</div>
+}
+
+<div class="mb-3">
+  <button class="btn btn-outline-secondary btn-sm" disabled="@_loading" @onclick="LoadAsync">Refresh</button>
+  <a class="btn btn-primary btn-sm ms-2" href="ai-chat">Optimize a sprint</a>
+</div>
+
+@if (_loading && _sprints.Count == 0)
+{
+  <div class="text-muted">Loading sprints…</div>
+}
+else if (_sprints.Count == 0)
+{
+  <div class="text-muted">No sprints yet. Use AI Chat → Optimize Sprint to create one.</div>
+}
+else
+{
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Dates</th>
+          <th>Tasks</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var sprint in _sprints)
+        {
+          <tr>
+            <td>@sprint.Name</td>
+            <td class="small text-muted">
+              @sprint.StartDate.ToString("yyyy-MM-dd") – @sprint.EndDate.ToString("yyyy-MM-dd")
+            </td>
+            <td>@sprint.Tasks.Count</td>
+            <td class="small text-muted">@sprint.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary" href="@($"sprints/{sprint.ExternalId}")">View</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@code {
+  private readonly List<SprintDto> _sprints = new();
+  private string? _error;
+  private bool _loading;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadAsync();
+  }
+
+  private async Task LoadAsync()
+  {
+    _loading = true;
+    _error = null;
+    try
+    {
+      var result = await TodoDataService.GetSprints();
+      _sprints.Clear();
+      if (result.IsSucceed && result.Payload is not null)
+      {
+        _sprints.AddRange(result.Payload);
+      }
+      else
+      {
+        _error = result.Message ?? "Failed to load sprints.";
+      }
+    }
+    finally
+    {
+      _loading = false;
+    }
+  }
+}

@@ -267,5 +267,41 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<List<SprintDto>>> GetSprints()
+    {
+      var result = new ApiCallResult<List<SprintDto>>();
+      var response = await _httpClient.GetAsync("api/sprints");
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<List<SprintDto>>() ?? new List<SprintDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
+
+    public async Task<ApiCallResult<SprintDto>> GetSprint(Guid externalId)
+    {
+      var result = new ApiCallResult<SprintDto>();
+      var response = await _httpClient.GetAsync($"api/sprints/{externalId}");
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<SprintDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }
