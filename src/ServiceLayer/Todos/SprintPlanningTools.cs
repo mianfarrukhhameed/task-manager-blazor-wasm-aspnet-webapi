@@ -47,6 +47,15 @@ public sealed class SprintPlanningTools
     /// <summary>When true, tool steps are labeled Analyst vs Planner; otherwise SprintAgent.</summary>
     public bool UseMultiAgentLabels { get; private set; }
 
+    private string _activeAgentRole = string.Empty;
+
+    /// <summary>Labels subsequent tool steps (Analyst or Planner) in multi-agent mode.</summary>
+    public void SetActiveAgentRole(string role) => _activeAgentRole = role;
+
+    /// <summary>Top candidate external ids (for planner prompt grounding).</summary>
+    public IReadOnlyList<Guid> CandidateExternalIds =>
+        _candidates.Select(t => t.ExternalId).ToList();
+
     public async Task ConfigureAsync(
         Guid ownerId,
         int maxTasks,
@@ -240,10 +249,10 @@ public sealed class SprintPlanningTools
             || string.Equals(todo.Priority, "Medium", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void RecordStep(string role, string toolName, string summary)
+    private void RecordStep(string defaultRole, string toolName, string summary)
     {
         var agentName = UseMultiAgentLabels
-            ? role
+            ? (string.IsNullOrWhiteSpace(_activeAgentRole) ? defaultRole : _activeAgentRole)
             : "SprintAgent";
 
         Steps.Add(new AgentStepDto

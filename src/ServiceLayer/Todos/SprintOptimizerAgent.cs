@@ -7,7 +7,6 @@ using Fistix.TaskManager.Core.DomainModel.Aggregates;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System;
@@ -38,12 +37,14 @@ public class SprintOptimizerAgent
 
     private const string PlannerInstructions = """
         You are the sprint Planner for a task manager.
-        You receive the Analyst's report. You MUST use tools — do not invent todo GUIDs.
-        1) propose_sprint_plan with comma-separated real todo ids and brief reasoning
-        2) create_sprint to persist
-        Prefer High priority, earlier due dates, and the Analyst's recommendations.
-        Respect max task and duration constraints exposed by the tools.
-        After tools finish, give a short final summary for the user.
+        You receive the Analyst's report and a list of valid todo external GUIDs.
+        You MUST call tools — do not invent todo GUIDs and do not finish with text only.
+        REQUIRED steps (in order):
+        1) propose_sprint_plan — comma-separated real todo external GUIDs from the Analyst report and a brief reasoning
+        2) create_sprint — persist the sprint
+        Use only ids that appear in the Analyst report or the valid-id list provided in the user message.
+        Respect max task and duration constraints.
+        After both tools succeed, give a one-sentence summary.
         """;
 
     private const string SingleAgentInstructions = """
@@ -95,10 +96,19 @@ public class SprintOptimizerAgent
             var goal = BuildGoal(maxTasks, durationDays, name);
 
             AgentResponse response = multi
-                ? await RunMultiAgentWorkflowAsync(chatClient, goal, cancellationToken)
+                ? await RunMultiAgentWorkflowAsync(chatClient, goal, maxTasks, durationDays, name, cancellationToken)
                 : await RunSingleAgentAsync(chatClient, goal, cancellationToken);
 
             EnsureToolStepsPresent(response);
+
+            if (_tools.SelectedTodos.Count == 0 && multi)
+            {
+                _logger.LogWarning(
+                    "Planner did not select tasks after workflow; attempting recovery propose. Steps: {Steps}",
+                    string.Join(" → ", _tools.Steps.Select(s => $"{s.AgentName}/{s.ToolName}")));
+
+                await TryRecoverPlannerSelectionAsync(chatClient, goal, maxTasks, durationDays, name, cancellationToken);
+            }
 
             if (_tools.CreatedSprintId.HasValue && _tools.SelectedTodos.Count > 0)
             {
@@ -133,6 +143,9 @@ public class SprintOptimizerAgent
     private async Task<AgentResponse> RunMultiAgentWorkflowAsync(
         IChatClient chatClient,
         string goal,
+        int maxTasks,
+        int durationDays,
+        string? name,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Running MAF Analyst → Planner sequential workflow");
@@ -148,26 +161,6 @@ public class SprintOptimizerAgent
                 AIFunctionFactory.Create(_tools.FindDueSoonTodos)
             ]);
 
-        AIAgent planner = chatClient.AsAIAgent(
-            instructions: PlannerInstructions,
-            name: "SprintPlanner",
-            description: "Proposes and creates a sprint from the Analyst report.",
-            tools:
-            [
-                AIFunctionFactory.Create(_tools.ProposeSprintPlan),
-                AIFunctionFactory.Create(_tools.CreateSprint)
-            ]);
-
-        // chainOnlyAgentResponses: Planner gets Analyst's text brief, not the full tool transcript
-        // (helps OpenAI-compat providers that struggle with long tool-history replays).
-        var workflow = AgentWorkflowBuilder.BuildSequential(
-            chainOnlyAgentResponses: true,
-            agents: [analyst, planner]);
-
-        AIAgent hosted = workflow.AsAIAgent(
-            name: "SprintPlanningWorkflow",
-            description: "Sequential Analyst → Planner sprint planning workflow.");
-
         _tools.Steps.Add(new AgentStepDto
         {
             AgentName = "Workflow",
@@ -175,7 +168,110 @@ public class SprintOptimizerAgent
             Summary = "Analyst → Planner"
         });
 
-        return await hosted.RunAsync(goal, cancellationToken: cancellationToken);
+        _tools.SetActiveAgentRole("Analyst");
+        var analystResponse = await analyst.RunAsync(goal, cancellationToken: cancellationToken);
+        EnsureToolStepsPresent(analystResponse);
+
+        var analystBrief = string.IsNullOrWhiteSpace(analystResponse.Text)
+            ? "Analyst did not return a summary. Prioritize High priority and earliest due dates."
+            : analystResponse.Text.Trim();
+
+        _logger.LogInformation(
+            "Analyst phase complete. Tool steps={StepCount}, brief length={BriefLength}",
+            _tools.Steps.Count,
+            analystBrief.Length);
+
+        var plannerGoal = BuildPlannerGoal(goal, analystBrief, maxTasks);
+
+        _tools.SetActiveAgentRole("Planner");
+        AIAgent planner = chatClient.AsAIAgent(
+            instructions: PlannerInstructions,
+            name: "SprintPlanner",
+            description: "Proposes and creates a sprint from the Analyst report.",
+            tools:
+            [
+                AIFunctionFactory.Create(_tools.SearchIncompleteTodos),
+                AIFunctionFactory.Create(_tools.ProposeSprintPlan),
+                AIFunctionFactory.Create(_tools.CreateSprint)
+            ]);
+
+        var plannerResponse = await planner.RunAsync(plannerGoal, cancellationToken: cancellationToken);
+        EnsureToolStepsPresent(plannerResponse);
+
+        _logger.LogInformation(
+            "Planner phase complete. Selected={Selected}, Created={Created}",
+            _tools.SelectedTodos.Count,
+            _tools.CreatedSprintId);
+
+        return plannerResponse;
+    }
+
+    private async Task TryRecoverPlannerSelectionAsync(
+        IChatClient chatClient,
+        string goal,
+        int maxTasks,
+        int durationDays,
+        string? name,
+        CancellationToken cancellationToken)
+    {
+        var candidateIds = _tools.CandidateExternalIds;
+        if (candidateIds.Count == 0)
+        {
+            return;
+        }
+
+        var topIds = candidateIds.Take(Math.Clamp(maxTasks, 1, 50));
+        var idLine = string.Join(", ", topIds);
+
+        var recoveryGoal = $"""
+            {goal}
+
+            The Planner must call tools now. Valid todo external GUIDs (pick up to {maxTasks}):
+            {idLine}
+
+            Call propose_sprint_plan with a comma-separated subset of these ids, then create_sprint.
+            Do not respond without calling both tools.
+            """;
+
+        AIAgent planner = chatClient.AsAIAgent(
+            instructions: PlannerInstructions,
+            name: "SprintPlannerRecovery",
+            description: "Recovery planner pass with explicit candidate ids.",
+            tools:
+            [
+                AIFunctionFactory.Create(_tools.ProposeSprintPlan),
+                AIFunctionFactory.Create(_tools.CreateSprint)
+            ]);
+
+        _tools.Steps.Add(new AgentStepDto
+        {
+            AgentName = "Planner",
+            ToolName = "recovery_pass",
+            Summary = $"Retry with {topIds.Count()} explicit candidate ids."
+        });
+
+        _tools.SetActiveAgentRole("Planner");
+        var recoveryResponse = await planner.RunAsync(recoveryGoal, cancellationToken: cancellationToken);
+        EnsureToolStepsPresent(recoveryResponse);
+    }
+
+    private string BuildPlannerGoal(string goal, string analystBrief, int maxTasks)
+    {
+        var idHint = _tools.CandidateExternalIds.Count == 0
+            ? "No candidates loaded."
+            : string.Join(", ", _tools.CandidateExternalIds.Take(Math.Min(_tools.CandidateExternalIds.Count, maxTasks * 2)));
+
+        return $"""
+            {goal}
+
+            --- Analyst report ---
+            {analystBrief}
+
+            --- Valid todo external GUIDs (use only these in propose_sprint_plan, max {maxTasks}) ---
+            {idHint}
+
+            Call propose_sprint_plan then create_sprint before finishing.
+            """;
     }
 
     private async Task<AgentResponse> RunSingleAgentAsync(
