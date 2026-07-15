@@ -51,7 +51,10 @@ public sealed class EmbeddingProcessor : IEmbeddingProcessor
 
         var todo = await _todoTaskRepository.Get(todoExternalId, cancellationToken);
         var text = BuildEmbeddingText(todo.Title, todo.Description);
-        var embedding = await _embeddingService.GenerateEmbeddingAsync(text, cancellationToken);
+        var embedding = await _embeddingService.GenerateEmbeddingAsync(
+            text,
+            EmbeddingInputKind.Passage,
+            cancellationToken);
         await _vectorStore.UpsertTodoEmbeddingAsync(
             todo.Id,
             embedding,

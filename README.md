@@ -99,6 +99,17 @@ export Ai__Claude__ApiKey="your-anthropic-key"
 
 4. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored; use placeholders only in tracked files.
 
+### Local ONNX embeddings (BGE-small)
+
+Todo embeddings default to an in-process **ONNX Runtime** model (`bge-small-en-v1.5`, 384-d) when `Ai:Embedding:Provider` is `Onnx`. Model weights are not committed; download them once:
+
+```bash
+chmod +x scripts/download-bge-onnx.sh
+./scripts/download-bge-onnx.sh
+```
+
+Then set `Ai:Features:EnableEmbeddings` to `true`. Alternate providers remain available via `Ai:Embedding:Provider` (`OpenAI` or `Ollama`). If you switch embedding providers or models, clear or recreate stored rows in `TodoEmbeddings` so vectors stay comparable.
+
 ### Logging
 
 LLM prompts and task content are logged at **Debug** level only. At **Information** level, the AI pipeline logs metadata (provider, model, content lengths) without user data. Enable Debug logging locally when troubleshooting summarization:

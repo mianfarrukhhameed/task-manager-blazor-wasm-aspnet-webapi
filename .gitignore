@@ -433,3 +433,6 @@ FodyWeavers.xsd
 
 bin
 obj
+# Local ONNX embedding model weights (download via scripts/download-bge-onnx.sh)
+models/
+*.onnx

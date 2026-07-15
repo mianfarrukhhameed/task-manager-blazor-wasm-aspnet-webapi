@@ -31,18 +31,27 @@ public sealed class SemanticKernelEmbeddingService : IEmbeddingService
     public string ModelName => _aiConfig.Embedding.Model;
     public int Dimension => _aiConfig.Embedding.Dimension;
 
-    public async Task<float[]> GenerateEmbeddingAsync(string text, CancellationToken cancellationToken = default)
+    public async Task<float[]> GenerateEmbeddingAsync(
+        string text,
+        EmbeddingInputKind kind = EmbeddingInputKind.Passage,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             throw new ArgumentException("Text is required to generate an embedding.", nameof(text));
         }
 
+        // Optional: apply the same BGE-style query instruction for consistency across providers.
+        var prepared = EmbeddingPooling.ApplyInputKind(
+            text.Trim(),
+            kind,
+            _aiConfig.Embedding.Onnx?.QueryInstruction);
+
         var provider = _aiConfig.Embedding.Provider.Trim().ToLowerInvariant();
         return provider switch
         {
-            "ollama" => await GenerateOllamaEmbeddingAsync(text, cancellationToken),
-            _ => await GenerateOpenAiEmbeddingAsync(text, cancellationToken)
+            "ollama" => await GenerateOllamaEmbeddingAsync(prepared, cancellationToken),
+            _ => await GenerateOpenAiEmbeddingAsync(prepared, cancellationToken)
         };
     }
 

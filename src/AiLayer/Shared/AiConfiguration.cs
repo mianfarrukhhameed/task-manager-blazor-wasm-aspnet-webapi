@@ -18,12 +18,21 @@ public class AiConfiguration
 
 public class EmbeddingSettings
 {
-    /// <summary>OpenAI or Ollama (OpenAI-compatible embeddings API).</summary>
-    public string Provider { get; set; } = "OpenAI";
-    public string Model { get; set; } = "text-embedding-3-small";
+    /// <summary>Onnx (local BGE), OpenAI, or Ollama.</summary>
+    public string Provider { get; set; } = "Onnx";
+    public string Model { get; set; } = "bge-small-en-v1.5";
     public int Dimension { get; set; } = 384;
     public string ApiKey { get; set; } = "";
     public string Endpoint { get; set; } = "https://api.openai.com/v1";
+    public OnnxEmbeddingSettings Onnx { get; set; } = new();
+}
+
+public class OnnxEmbeddingSettings
+{
+    /// <summary>Directory containing model.onnx and vocab.txt (relative to content root or absolute).</summary>
+    public string ModelDirectory { get; set; } = "models/bge-small-en-v1.5";
+    public int MaxSequenceLength { get; set; } = 512;
+    public string QueryInstruction { get; set; } = "Represent this sentence for searching: ";
 }
 
 public class OpenAiSettings
