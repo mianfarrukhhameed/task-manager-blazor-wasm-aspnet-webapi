@@ -196,4 +196,51 @@ public class AiController : ControllerBase
             return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to apply AI priority");
         }
     }
+
+    /// <summary>
+    /// Finds todos by semantic similarity to a natural-language query.
+    /// </summary>
+    [HttpPost("todos/search/semantic")]
+    [EnableRateLimiting(RateLimitPolicies.AiSemanticSearch)]
+    [ProducesResponseType(typeof(SemanticSearchResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<SemanticSearchResponseDto>> SemanticSearch(
+        [FromBody] SemanticSearchTodosCommand command)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(result.Payload);
+        }
+        catch (FeatureDisabledException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "AI semantic search is unavailable",
+                Detail = ex.Message,
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (ForbiddenAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running semantic search");
+            return ApiErrorResponses.UnexpectedError(HttpContext, "Failed to run semantic search");
+        }
+    }
 }
