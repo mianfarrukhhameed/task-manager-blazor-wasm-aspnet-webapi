@@ -6,64 +6,59 @@
 
 @inject TodoDataService TodoDataService
 
-<div class="mb-3">
-  <a href="sprints">&larr; All sprints</a>
-</div>
+<MudButton Href="sprints" StartIcon="@Icons.Material.Filled.ArrowBack" Variant="Variant.Text" Class="mb-4">
+  All sprints
+</MudButton>
 
 @if (!string.IsNullOrWhiteSpace(_error))
 {
-  <div class="alert alert-warning">@_error</div>
+  <MudAlert Severity="Severity.Warning">@_error</MudAlert>
 }
 else if (_loading || _sprint is null)
 {
-  <div class="text-muted">Loading sprint…</div>
+  <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
 }
 else
 {
-  <h1>@_sprint.Name</h1>
-  <div class="small text-muted mb-3">
+  <MudText Typo="Typo.h4" GutterBottom="true">@_sprint.Name</MudText>
+  <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     @_sprint.StartDate.ToString("yyyy-MM-dd") – @_sprint.EndDate.ToString("yyyy-MM-dd")
     · created @_sprint.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC
     · <code>@_sprint.ExternalId</code>
-  </div>
+  </MudText>
 
   @if (!string.IsNullOrWhiteSpace(_sprint.Reasoning))
   {
-    <div class="card mb-4">
-      <div class="card-header fw-semibold">Optimizer reasoning</div>
-      <div class="card-body" style="white-space: pre-wrap;">@_sprint.Reasoning</div>
-    </div>
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+      <MudText Typo="Typo.subtitle1" Class="mb-2">Optimizer reasoning</MudText>
+      <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@_sprint.Reasoning</MudText>
+    </MudPaper>
   }
 
-  <h2 class="h5">Selected tasks (@_sprint.Tasks.Count)</h2>
+  <MudText Typo="Typo.h6" Class="mb-2">Selected tasks (@_sprint.Tasks.Count)</MudText>
+
   @if (_sprint.Tasks.Count == 0)
   {
-    <div class="text-muted">No tasks linked to this sprint.</div>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">No tasks linked to this sprint.</MudAlert>
   }
   else
   {
-    <ul class="list-group">
-      @foreach (var task in _sprint.Tasks)
-      {
-        <li class="list-group-item d-flex justify-content-between align-items-start">
-          <div>
-            <div>@task.Title</div>
-            <div class="small text-muted">
-              @task.Priority · @task.Status
-              @if (!string.IsNullOrWhiteSpace(task.Category))
-              {
-                <span>· @task.Category</span>
-              }
-              @if (task.DueDate is not null)
-              {
-                <span>· due @task.DueDate.Value.ToString("yyyy-MM-dd")</span>
-              }
-            </div>
-          </div>
-          <a class="small" href="todo">Todo board</a>
-        </li>
-      }
-    </ul>
+    <MudTable Items="_sprint.Tasks" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
+      <HeaderContent>
+        <MudTh>Title</MudTh>
+        <MudTh>Priority</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Due</MudTh>
+      </HeaderContent>
+      <RowTemplate>
+        <MudTd DataLabel="Title">@context.Title</MudTd>
+        <MudTd DataLabel="Priority">
+          <MudChip T="string" Size="Size.Small">@context.Priority</MudChip>
+        </MudTd>
+        <MudTd DataLabel="Status">@context.Status</MudTd>
+        <MudTd DataLabel="Due">@(context.DueDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+      </RowTemplate>
+    </MudTable>
   }
 }
 

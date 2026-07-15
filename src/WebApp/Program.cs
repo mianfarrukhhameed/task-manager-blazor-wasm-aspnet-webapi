@@ -3,11 +3,13 @@ using Fistix.TaskManager.WebApp.Extentions;
 using Fistix.TaskManager.WebApp.Services;
 using Fistix.TaskManager.WebApp.Services.DataServices;
 using Fistix.TaskManager.WebApp.Services.StateServices;
+using Fistix.TaskManager.WebApp.Shared.Theme;
 using FluentValidation;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MudBlazor.Services;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -37,6 +39,7 @@ namespace Fistix.TaskManager.WebApp
       string baseAddress)
     {
       services.AddValidatorsFromAssemblyContaining<CreateTodoTaskCommandValidator>();
+      services.AddMudServices();
 
       services.SetupAuth0Service(configuration, baseAddress);
       services.SetupDefaultApiClient(configuration);
@@ -45,6 +48,7 @@ namespace Fistix.TaskManager.WebApp
       services.AddScoped<TodoDataService>();
       services.AddScoped<TodoStateService>();
       services.AddScoped<ClassificationHubService>();
+      services.AddScoped<ThemeService>();
     }
   }
 }

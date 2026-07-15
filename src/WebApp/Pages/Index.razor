@@ -1,7 +1,48 @@
 ﻿@page "/"
+@attribute [Authorize]
 
-<h1>Hello, world!</h1>
+<MudText Typo="Typo.h4" GutterBottom="true">Dashboard</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+  Welcome to Task Manager — organize todos, plan sprints, and use AI assistance.
+</MudText>
 
-Welcome to your new app.
+<MudGrid Spacing="3">
+  <MudItem xs="12" sm="6" md="4">
+    <MudPaper Class="pa-4" Elevation="2" Style="height:100%;">
+      <MudStack Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.Task" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h6">Todos</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+          Create, search, and manage tasks with semantic search and AI summaries.
+        </MudText>
+        <MudButton Href="todo" Variant="Variant.Filled" Color="Color.Primary" Class="mt-2">Open todos</MudButton>
+      </MudStack>
+    </MudPaper>
+  </MudItem>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+  <MudItem xs="12" sm="6" md="4">
+    <MudPaper Class="pa-4" Elevation="2" Style="height:100%;">
+      <MudStack Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Secondary" Size="Size.Large" />
+        <MudText Typo="Typo.h6">Sprints</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+          Browse AI-optimized sprint plans and selected task groupings.
+        </MudText>
+        <MudButton Href="sprints" Variant="Variant.Filled" Color="Color.Secondary" Class="mt-2">View sprints</MudButton>
+      </MudStack>
+    </MudPaper>
+  </MudItem>
+
+  <MudItem xs="12" sm="6" md="4">
+    <MudPaper Class="pa-4" Elevation="2" Style="height:100%;">
+      <MudStack Spacing="2">
+        <MudIcon Icon="@Icons.Material.Filled.SmartToy" Color="Color.Tertiary" Size="Size.Large" />
+        <MudText Typo="Typo.h6">AI Chat</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+          RAG Q&amp;A, function calling, and multi-agent sprint optimization.
+        </MudText>
+        <MudButton Href="ai-chat" Variant="Variant.Filled" Color="Color.Tertiary" Class="mt-2">Open AI chat</MudButton>
+      </MudStack>
+    </MudPaper>
+  </MudItem>
+</MudGrid>

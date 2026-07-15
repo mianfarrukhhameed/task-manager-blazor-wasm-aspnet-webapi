@@ -1,18 +1,49 @@
 ﻿@inherits LayoutComponentBase
+@inject ThemeService ThemeService
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<MudLayout>
+  <MudAppBar Elevation="1" Dense="true">
+    <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+    <MudText Typo="Typo.h6" Class="ml-2">Task Manager</MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@(_isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                   Color="Color.Inherit"
+                   Title="Toggle theme"
+                   OnClick="ToggleThemeAsync" />
+    <LoginDisplay />
+  </MudAppBar>
 
-    <div class="main">
-      <div class="top-row px-4">
-        <a href="http://blazor.net" target="_blank" class="ml-md-auto">About</a>
-      </div>
-      <LoginDisplay></LoginDisplay>
+  <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Variant="@DrawerVariant.Responsive">
+    <NavMenu />
+  </MudDrawer>
 
-      <div class="content px-4">
-        @Body
-      </div>
-    </div>
-</div>
+  <MudMainContent Class="pa-4 pa-md-6">
+    @Body
+  </MudMainContent>
+</MudLayout>
+
+@code {
+  private bool _drawerOpen = true;
+  private bool _isDark;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await ThemeService.InitializeAsync();
+    _isDark = ThemeService.IsDarkMode;
+    ThemeService.Changed += OnThemeChanged;
+  }
+
+  private void OnThemeChanged()
+  {
+    _isDark = ThemeService.IsDarkMode;
+    InvokeAsync(StateHasChanged);
+  }
+
+  private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+  private async Task ToggleThemeAsync()
+  {
+    await ThemeService.ToggleAsync();
+    _isDark = ThemeService.IsDarkMode;
+  }
+}

@@ -9,19 +9,31 @@
 @using Fistix.TaskManager.WebApp.Services.StateServices
 
 @inject TodoStateService _TodoStateService
+@inject ISnackbar Snackbar
 
-<h1>Todo Tasks</h1>
-<p class="validation-message">@_errorMessage</p>
+<MudText Typo="Typo.h4" GutterBottom="true">Todo Tasks</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+  Manage tasks, semantic search, and AI summaries.
+</MudText>
 
-<TaskListComponent Tasks="@_tasks" OnRefresh="GetAllTodos" />
-<br />
-<div class="container">
-  <CreateTaskComponent OnSubmitForm="@(e => OnCreateTask((CreateTodoTaskCommand)e))" />
-</div>
+@if (!string.IsNullOrWhiteSpace(_errorMessage))
+{
+  <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@_errorMessage</MudAlert>
+}
+
+<MudGrid>
+  <MudItem xs="12" lg="8">
+    <TaskListComponent Tasks="@_tasks" OnRefresh="GetAllTodos" />
+  </MudItem>
+  <MudItem xs="12" lg="4">
+    <CreateTaskComponent OnSubmitForm="@(e => OnCreateTask((CreateTodoTaskCommand)e))" />
+  </MudItem>
+</MudGrid>
+
 @code {
   private string _errorMessage = string.Empty;
-  private List<TodoTaskDto> _tasks = new List<TodoTaskDto>();
-  private List<IDisposable> _subscriptions = new List<IDisposable>();
+  private List<TodoTaskDto> _tasks = new();
+  private List<IDisposable> _subscriptions = new();
 
   protected override void OnInitialized()
   {
@@ -47,23 +59,33 @@
             if (!x.IsSucceed)
             {
               _errorMessage = x.Message;
+              Snackbar.Add(x.Message ?? "Failed to load todos", Severity.Error);
               StateHasChanged();
             }
             break;
 
-
           case nameof(CreateTodoTaskCommand):
-            if (!x.IsSucceed)
+            if (x.IsSucceed)
+            {
+              Snackbar.Add("Task created", Severity.Success);
+            }
+            else
             {
               _errorMessage = x.Message;
+              Snackbar.Add(x.Message ?? "Failed to create task", Severity.Error);
               StateHasChanged();
             }
             break;
 
           case nameof(UpdateTodoTaskCommand):
-            if (!x.IsSucceed)
+            if (x.IsSucceed)
+            {
+              Snackbar.Add("Task updated", Severity.Success);
+            }
+            else
             {
               _errorMessage = x.Message;
+              Snackbar.Add(x.Message ?? "Failed to update task", Severity.Error);
               StateHasChanged();
             }
             break;
@@ -86,6 +108,9 @@
 
   public void Dispose()
   {
-    _subscriptions.ForEach(x => x.Dispose());
+    foreach (var subscription in _subscriptions)
+    {
+      subscription.Dispose();
+    }
   }
 }

@@ -1,9 +1,18 @@
+@inject ThemeService ThemeService
+
+<MudThemeProvider Theme="@ThemeService.CurrentTheme" @bind-IsDarkMode="@_isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider MaxSnackbars="4" Position="SnackbarPosition.BottomRight" />
+
 <CascadingAuthenticationState>
   <Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">
       <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
         <Authorizing>
-          <div class="spinner-grow"></div>
+          <MudContainer Class="d-flex justify-center align-center" Style="min-height: 60vh;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+          </MudContainer>
         </Authorizing>
         <NotAuthorized>
           <RedirectToLogin LoginUrlString="authentication/login" />
@@ -12,8 +21,30 @@
     </Found>
     <NotFound>
       <LayoutView Layout="@typeof(MainLayout)">
-        <p>Sorry, there's nothing at this address.</p>
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-8">
+          <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+            Sorry, there is nothing at this address.
+          </MudAlert>
+          <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">Go to dashboard</MudButton>
+        </MudContainer>
       </LayoutView>
     </NotFound>
   </Router>
 </CascadingAuthenticationState>
+
+@code {
+  private bool _isDarkMode;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await ThemeService.InitializeAsync();
+    _isDarkMode = ThemeService.IsDarkMode;
+    ThemeService.Changed += OnThemeChanged;
+  }
+
+  private void OnThemeChanged()
+  {
+    _isDarkMode = ThemeService.IsDarkMode;
+    InvokeAsync(StateHasChanged);
+  }
+}
