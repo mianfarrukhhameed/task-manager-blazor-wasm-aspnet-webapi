@@ -128,6 +128,7 @@ else
           Sprint id: <code>@_sprintResult.SprintId</code>
           · @_sprintResult.StartDate.ToString("yyyy-MM-dd") – @_sprintResult.EndDate.ToString("yyyy-MM-dd")
         </div>
+        <a class="btn btn-sm btn-outline-primary mb-3" href="@($"sprints/{_sprintResult.SprintId}")">Open sprint details</a>
         @if (_sprintResult.Steps.Count > 0)
         {
           <div class="fw-semibold mb-2">Agent steps (Microsoft Agent Framework)</div>

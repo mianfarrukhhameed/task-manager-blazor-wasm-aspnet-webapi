@@ -80,17 +80,32 @@ public class CreateSprintCommandHandler : IRequestHandler<CreateSprintCommand, C
         return todos;
     }
 
-    internal static SprintDto MapSprint(Sprint sprint) => new()
+    internal static SprintDto MapSprint(Sprint sprint)
     {
-        ExternalId = sprint.ExternalId,
-        Name = sprint.Name,
-        StartDate = sprint.StartDate,
-        EndDate = sprint.EndDate,
-        CreatedAt = sprint.CreatedAt,
-        Reasoning = sprint.Reasoning,
-        TodoExternalIds = sprint.SprintTodos
+        var tasks = sprint.SprintTodos
             .Where(st => st.TodoTask is not null)
-            .Select(st => st.TodoTask!.ExternalId)
-            .ToList()
-    };
+            .Select(st => st.TodoTask!)
+            .Select(t => new SprintTaskSummaryDto
+            {
+                ExternalId = t.ExternalId,
+                Title = t.Title,
+                Priority = t.Priority,
+                Status = t.Status,
+                DueDate = t.DueDate,
+                Category = t.Category
+            })
+            .ToList();
+
+        return new SprintDto
+        {
+            ExternalId = sprint.ExternalId,
+            Name = sprint.Name,
+            StartDate = sprint.StartDate,
+            EndDate = sprint.EndDate,
+            CreatedAt = sprint.CreatedAt,
+            Reasoning = sprint.Reasoning,
+            TodoExternalIds = tasks.Select(t => t.ExternalId).ToList(),
+            Tasks = tasks
+        };
+    }
 }
