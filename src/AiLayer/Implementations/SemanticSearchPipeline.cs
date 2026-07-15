@@ -2,6 +2,7 @@
 
 using Fistix.TaskManager.AiLayer.Abstractions;
 using Fistix.TaskManager.AiLayer.Models;
+using Fistix.TaskManager.AiLayer.Shared;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -11,15 +12,18 @@ public sealed class SemanticSearchPipeline
 {
     private readonly IEmbeddingService _embeddingService;
     private readonly IVectorStore _vectorStore;
+    private readonly AiConfiguration _aiConfig;
     private readonly ILogger<SemanticSearchPipeline> _logger;
 
     public SemanticSearchPipeline(
         IEmbeddingService embeddingService,
         IVectorStore vectorStore,
+        AiConfiguration aiConfig,
         ILogger<SemanticSearchPipeline> logger)
     {
         _embeddingService = embeddingService;
         _vectorStore = vectorStore;
+        _aiConfig = aiConfig;
         _logger = logger;
     }
 
@@ -28,26 +32,48 @@ public sealed class SemanticSearchPipeline
         CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
-        var embedding = await _embeddingService.GenerateEmbeddingAsync(request.Query, cancellationToken);
+        var embedding = await _embeddingService.GenerateEmbeddingAsync(
+            request.Query,
+            EmbeddingInputKind.Query,
+            cancellationToken);
         var hits = await _vectorStore.SearchAsync(
             embedding,
             _embeddingService.ModelName,
             request.OwnerExternalId,
             request.Limit,
             cancellationToken);
+
+        var minSimilarity = _aiConfig.Features.SemanticSearch?.MinSimilarity ?? 0.45;
+        var filtered = FilterByMinSimilarity(hits, minSimilarity);
         sw.Stop();
 
         _logger.LogInformation(
-            "Semantic search returned {Count} hits in {ElapsedMs}ms for model {Model}",
+            "Semantic search returned {Count}/{RawCount} hits (minSimilarity={MinSimilarity}) in {ElapsedMs}ms for model {Model}",
+            filtered.Count,
             hits.Count,
+            minSimilarity,
             sw.ElapsedMilliseconds,
             _embeddingService.ModelName);
 
         return new SemanticSearchPipelineResult
         {
-            Hits = hits,
+            Hits = filtered,
             ExecutionTimeMs = sw.ElapsedMilliseconds,
             Model = _embeddingService.ModelName
         };
+    }
+
+    /// <summary>Drops nearest-neighbor hits that are too weak to be considered relevant.</summary>
+    public static IReadOnlyList<VectorSearchHit> FilterByMinSimilarity(
+        IReadOnlyList<VectorSearchHit> hits,
+        double minSimilarity)
+    {
+        if (hits.Count == 0)
+        {
+            return hits;
+        }
+
+        var threshold = Math.Clamp(minSimilarity, 0.0, 1.0);
+        return hits.Where(h => h.Similarity >= threshold).ToList();
     }
 }

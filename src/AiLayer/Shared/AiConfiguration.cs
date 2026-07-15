@@ -88,10 +88,20 @@ public class AiFeaturesConfiguration
     public ClassificationConfiguration Classification { get; set; } = new();
     public bool EnableEmbeddings { get; set; } = false;
     public bool EnableSemanticSearch { get; set; } = false;
+    public SemanticSearchConfiguration SemanticSearch { get; set; } = new();
     public AiRateLimitConfiguration SemanticSearchRateLimit { get; set; } = new();
     public bool EnableRag { get; set; } = false;
     public AiRateLimitConfiguration RagRateLimit { get; set; } = new();
     public bool EnableFunctionCalling { get; set; } = false;
     public bool EnableAgents { get; set; } = false;
     public bool EnableMcp { get; set; } = false;
+}
+
+public class SemanticSearchConfiguration
+{
+    /// <summary>
+    /// Minimum cosine similarity (0–1) required to keep a hit.
+    /// Nearest-neighbor search always returns something; scores below this are treated as irrelevant.
+    /// </summary>
+    public double MinSimilarity { get; set; } = 0.45;
 }
