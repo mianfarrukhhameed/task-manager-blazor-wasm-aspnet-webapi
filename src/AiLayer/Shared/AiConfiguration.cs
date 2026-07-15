@@ -18,12 +18,21 @@ public class AiConfiguration
 
 public class EmbeddingSettings
 {
-    /// <summary>OpenAI or Ollama (OpenAI-compatible embeddings API).</summary>
-    public string Provider { get; set; } = "OpenAI";
-    public string Model { get; set; } = "text-embedding-3-small";
+    /// <summary>Onnx (local BGE), OpenAI, or Ollama.</summary>
+    public string Provider { get; set; } = "Onnx";
+    public string Model { get; set; } = "bge-small-en-v1.5";
     public int Dimension { get; set; } = 384;
     public string ApiKey { get; set; } = "";
     public string Endpoint { get; set; } = "https://api.openai.com/v1";
+    public OnnxEmbeddingSettings Onnx { get; set; } = new();
+}
+
+public class OnnxEmbeddingSettings
+{
+    /// <summary>Directory containing model.onnx and vocab.txt (relative to content root or absolute).</summary>
+    public string ModelDirectory { get; set; } = "models/bge-small-en-v1.5";
+    public int MaxSequenceLength { get; set; } = 512;
+    public string QueryInstruction { get; set; } = "Represent this sentence for searching: ";
 }
 
 public class OpenAiSettings
@@ -79,6 +88,7 @@ public class AiFeaturesConfiguration
     public ClassificationConfiguration Classification { get; set; } = new();
     public bool EnableEmbeddings { get; set; } = false;
     public bool EnableSemanticSearch { get; set; } = false;
+    public SemanticSearchConfiguration SemanticSearch { get; set; } = new();
     public AiRateLimitConfiguration SemanticSearchRateLimit { get; set; } = new();
     public bool EnableRag { get; set; } = false;
     public AiRateLimitConfiguration RagRateLimit { get; set; } = new();
@@ -86,4 +96,13 @@ public class AiFeaturesConfiguration
     public AiRateLimitConfiguration FunctionCallingRateLimit { get; set; } = new();
     public bool EnableAgents { get; set; } = false;
     public bool EnableMcp { get; set; } = false;
+}
+
+public class SemanticSearchConfiguration
+{
+    /// <summary>
+    /// Minimum cosine similarity (0–1) required to keep a hit.
+    /// Nearest-neighbor search always returns something; scores below this are treated as irrelevant.
+    /// </summary>
+    public double MinSimilarity { get; set; } = 0.45;
 }

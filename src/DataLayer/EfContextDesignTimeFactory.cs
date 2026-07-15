@@ -18,16 +18,8 @@ public class EfContextDesignTimeFactory : IDesignTimeDbContextFactory<EfContext>
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("MainDb");
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__MainDb");
-        }
-
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            connectionString = "Host=localhost;Port=5433;Database=taskdb;Username=taskuser;Password=taskpass";
-        }
+        var connectionString = configuration.GetConnectionString("MainDb")
+            ?? Environment.GetEnvironmentVariable("ConnectionStrings__MainDb");
 
         var optionsBuilder = new DbContextOptionsBuilder<EfContext>();
         optionsBuilder.UseNpgsql(connectionString, o => o.UseVector());

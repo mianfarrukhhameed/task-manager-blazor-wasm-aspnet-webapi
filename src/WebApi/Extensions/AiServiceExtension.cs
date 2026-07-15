@@ -1,3 +1,4 @@
+using System;
 using Fistix.TaskManager.AiLayer.Abstractions;
 using Fistix.TaskManager.AiLayer.Implementations;
 using Fistix.TaskManager.AiLayer.Shared;
@@ -12,7 +13,7 @@ namespace Fistix.TaskManager.WebApi.Extensions;
 /// </summary>
 public static class AiServiceExtension
 {
-    public static IServiceCollection AddAiServices(this IServiceCollection services)
+    public static IServiceCollection AddAiServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(provider =>
         {
@@ -38,7 +39,17 @@ public static class AiServiceExtension
         services.AddScoped<ToolProposalPipeline>();
         services.AddSingleton<TodoManagementPlugin>();
         services.AddHttpClient(nameof(SemanticKernelEmbeddingService));
-        services.AddScoped<IEmbeddingService, SemanticKernelEmbeddingService>();
+
+        var embeddingProvider = configuration["Ai:Embedding:Provider"] ?? "Onnx";
+        if (string.Equals(embeddingProvider, "onnx", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<OnnxBgeEmbeddingService>();
+            services.AddSingleton<IEmbeddingService>(sp => sp.GetRequiredService<OnnxBgeEmbeddingService>());
+        }
+        else
+        {
+            services.AddScoped<IEmbeddingService, SemanticKernelEmbeddingService>();
+        }
 
         return services;
     }

@@ -1,5 +1,6 @@
 using AutoMapper;
 using Fistix.TaskManager.AiLayer.Shared;
+using Fistix.TaskManager.Core;
 using Fistix.TaskManager.Core.Abstractions.Repositories;
 using Fistix.TaskManager.Core.Abstractions.Services;
 using Fistix.TaskManager.Core.SecurityModel;
@@ -49,7 +50,7 @@ public class UpdateTodoTaskCommandHandler : IRequestHandler<UpdateTodoTaskComman
 
         todoTask.Title = command.Title;
         todoTask.Description = command.Description;
-        todoTask.DueDate = command.DueDate;
+        todoTask.DueDate = DateTimeUtc.EnsureUtc(command.DueDate);
         todoTask.Priority = ClassificationGuardrails.ToTaskPriority(command.Priority);
 
         await _todoTaskRepository.Update(todoTask, cancellationToken);

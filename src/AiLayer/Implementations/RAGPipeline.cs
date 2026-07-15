@@ -2,27 +2,29 @@
 
 using Fistix.TaskManager.AiLayer.Abstractions;
 using Fistix.TaskManager.AiLayer.Models;
+using Fistix.TaskManager.AiLayer.Shared;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace Fistix.TaskManager.AiLayer.Implementations;
 
+/// <summary>
+/// Generates an LLM answer from retrieved todo sources.
+/// Retrieval is owned by the caller (e.g. SemanticSearchPipeline with BGE Query + MinSimilarity).
+/// </summary>
 public sealed class RAGPipeline
 {
-    private readonly IEmbeddingService _embeddingService;
-    private readonly IVectorStore _vectorStore;
     private readonly ILlmProviderService _llm;
+    private readonly AiConfiguration _aiConfig;
     private readonly ILogger<RAGPipeline> _logger;
 
     public RAGPipeline(
-        IEmbeddingService embeddingService,
-        IVectorStore vectorStore,
         ILlmProviderService llm,
+        AiConfiguration aiConfig,
         ILogger<RAGPipeline> logger)
     {
-        _embeddingService = embeddingService;
-        _vectorStore = vectorStore;
         _llm = llm;
+        _aiConfig = aiConfig;
         _logger = logger;
     }
 
@@ -30,16 +32,10 @@ public sealed class RAGPipeline
         RagPipelineRequest request,
         CancellationToken cancellationToken = default)
     {
-        var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(request.Question, cancellationToken);
-        var hits = await _vectorStore.SearchAsync(
-            queryEmbedding,
-            _embeddingService.ModelName,
-            request.OwnerExternalId,
-            request.TopK,
-            cancellationToken);
-
+        var todayUtc = DateTime.UtcNow.Date;
         var contextBuilder = new StringBuilder();
         contextBuilder.AppendLine($"Context focus: {request.Context}");
+        contextBuilder.AppendLine($"Today's date (UTC): {todayUtc:yyyy-MM-dd}");
         foreach (var source in request.SourceTodos)
         {
             contextBuilder.AppendLine($"- [{source.ExternalId}] {source.Title} | priority={source.Priority} status={source.Status} due={source.DueDate:u}");
@@ -52,6 +48,7 @@ public sealed class RAGPipeline
         var prompt = $"""
             You are a task-management assistant. Answer the user's question using ONLY the provided task context.
             If the context is insufficient, say what is missing. Be concise and cite task titles.
+            Today's date (UTC) is {todayUtc:yyyy-MM-dd}. Interpret relative time phrases such as "this week", "next month", or "this year" relative to that date and only against the task due dates in the context.
 
             Task context:
             {contextBuilder}
@@ -65,8 +62,27 @@ public sealed class RAGPipeline
         return new RagPipelineResult
         {
             Answer = answer.Trim(),
-            SourceTodoIds = hits.Select(h => h.TodoExternalId).ToList(),
-            Model = _embeddingService.ModelName
+            SourceTodoIds = request.SourceTodos.Select(s => s.ExternalId).ToList(),
+            Model = ResolveChatModel(_aiConfig)
         };
+    }
+
+    /// <summary>Chat/LLM model that produced the answer (not the embedding model).</summary>
+    public static string ResolveChatModel(AiConfiguration aiConfig)
+    {
+        var provider = (aiConfig.Provider ?? string.Empty).Trim().ToLowerInvariant();
+        var model = provider switch
+        {
+            "google" => aiConfig.GoogleAI.Model,
+            "openai" => aiConfig.OpenAI.Model,
+            "azureopenai" => aiConfig.AzureOpenAI.Model,
+            "claude" => aiConfig.Claude.Model,
+            "ollama" => aiConfig.Ollama.Model,
+            _ => null
+        };
+
+        return string.IsNullOrWhiteSpace(model)
+            ? (string.IsNullOrWhiteSpace(aiConfig.Provider) ? "unknown" : aiConfig.Provider)
+            : model;
     }
 }

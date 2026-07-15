@@ -2,7 +2,7 @@ namespace Fistix.TaskManager.AiLayer.Shared;
 
 public class ClassificationConfiguration
 {
-    public int RequestTimeoutMs { get; set; } = 2500;
+    public int RequestTimeoutMs { get; set; } = 15000;
     public int MaxRetries { get; set; } = 1;
     public int RetryDelayMs { get; set; } = 500;
 

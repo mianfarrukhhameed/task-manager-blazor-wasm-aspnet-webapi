@@ -2,11 +2,23 @@
 
 namespace Fistix.TaskManager.AiLayer.Abstractions;
 
+public enum EmbeddingInputKind
+{
+    /// <summary>Document/passage text (todo title + description).</summary>
+    Passage = 0,
+    /// <summary>Search query; ONNX BGE may prepend a retrieval instruction.</summary>
+    Query = 1
+}
+
 public interface IEmbeddingService
 {
     string ModelName { get; }
     int Dimension { get; }
-    Task<float[]> GenerateEmbeddingAsync(string text, CancellationToken cancellationToken = default);
+
+    Task<float[]> GenerateEmbeddingAsync(
+        string text,
+        EmbeddingInputKind kind = EmbeddingInputKind.Passage,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IVectorStore
