@@ -1,8 +1,6 @@
 ﻿using Fistix.TaskManager.Core.DomainModel.Aggregates;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Pgvector.EntityFrameworkCore;
 
 namespace Fistix.TaskManager.DataLayer
 {
@@ -14,14 +12,18 @@ namespace Fistix.TaskManager.DataLayer
     public DbSet<TodoTask> TodoTasks { get; set; }
     public DbSet<UserProfile> UserProfiles { get; set; }
     public DbSet<TodoAiMetadata> TodoAiMetadatas { get; set; }
+    public DbSet<TodoEmbedding> TodoEmbeddings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
       base.OnModelCreating(modelBuilder);
 
+      modelBuilder.HasPostgresExtension("vector");
+
       TodoTaskModelConfig(modelBuilder);
       UserProfileModelConfig(modelBuilder);
       TodoAiMetadataModelConfig(modelBuilder);
+      TodoEmbeddingModelConfig(modelBuilder);
     }
 
     private void TodoTaskModelConfig(ModelBuilder modelBuilder)
@@ -61,6 +63,25 @@ namespace Fistix.TaskManager.DataLayer
         entityModel.HasOne(m => m.TodoTask)
           .WithOne(t => t.AiMetadata)
           .HasForeignKey<TodoAiMetadata>(m => m.TodoId)
+          .OnDelete(DeleteBehavior.Cascade);
+      });
+    }
+
+    private void TodoEmbeddingModelConfig(ModelBuilder modelBuilder)
+    {
+      modelBuilder.Entity<TodoEmbedding>(entityModel =>
+      {
+        entityModel.ToTable("TodoEmbeddings");
+        entityModel.HasKey(k => k.Id);
+        entityModel.Property(p => p.Embedding)
+          .HasColumnType("vector(384)");
+        entityModel.Property(p => p.EmbeddingModel)
+          .HasMaxLength(100)
+          .IsRequired();
+        entityModel.HasIndex(e => new { e.TodoId, e.EmbeddingModel }).IsUnique();
+        entityModel.HasOne(e => e.TodoTask)
+          .WithMany()
+          .HasForeignKey(e => e.TodoId)
           .OnDelete(DeleteBehavior.Cascade);
       });
     }

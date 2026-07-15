@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using Pgvector.EntityFrameworkCore;
 using System;
 using System.IO;
 
@@ -21,7 +22,7 @@ public class EfContextDesignTimeFactory : IDesignTimeDbContextFactory<EfContext>
             ?? Environment.GetEnvironmentVariable("ConnectionStrings__MainDb");
 
         var optionsBuilder = new DbContextOptionsBuilder<EfContext>();
-        optionsBuilder.UseNpgsql(connectionString);
+        optionsBuilder.UseNpgsql(connectionString, o => o.UseVector());
 
         return new EfContext(optionsBuilder.Options);
     }

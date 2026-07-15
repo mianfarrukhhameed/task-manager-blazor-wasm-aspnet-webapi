@@ -1,12 +1,12 @@
-﻿using AutoMapper;
+﻿using Fistix.TaskManager.AiLayer.Abstractions;
+using Fistix.TaskManager.Core.AutoMapperProfiles;
 using Fistix.TaskManager.Core.Config;
+using Fistix.TaskManager.DataLayer;
 using Fistix.TaskManager.ServiceLayer.Background;
 using Fistix.TaskManager.ServiceLayer.Todos;
+using Fistix.TaskManager.ViewModel.Commands.Todos;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Fistix.TaskManager.Core.AutoMapperProfiles;
-using Fistix.TaskManager.ViewModel.Commands.Todos;
-using Fistix.TaskManager.DataLayer;
 
 namespace Fistix.TaskManager.ServiceLayer
 {
@@ -21,6 +21,11 @@ namespace Fistix.TaskManager.ServiceLayer
       services.AddSingleton<IClassificationQueue, ClassificationQueue>();
       services.AddScoped<IClassificationProcessor, ClassificationProcessor>();
       services.AddHostedService<ClassificationBackgroundService>();
+
+      services.AddSingleton<IEmbeddingQueue, EmbeddingQueue>();
+      services.AddScoped<IEmbeddingProcessor, EmbeddingProcessor>();
+      services.AddScoped<IVectorStore, PgVectorEmbeddingStore>();
+      services.AddHostedService<EmbeddingBackgroundService>();
             
       services.AddDataLayer(masterConfig);
     }

@@ -12,7 +12,27 @@ public class AiConfiguration
     public OllamaSettings Ollama { get; set; } = new();
     public GoogleAISettings GoogleAI { get; set; } = new();
     public ClaudeSettings Claude { get; set; } = new();
+    public EmbeddingSettings Embedding { get; set; } = new();
     public AiFeaturesConfiguration Features { get; set; } = new();
+}
+
+public class EmbeddingSettings
+{
+    /// <summary>Onnx (local BGE), OpenAI, or Ollama.</summary>
+    public string Provider { get; set; } = "Onnx";
+    public string Model { get; set; } = "bge-small-en-v1.5";
+    public int Dimension { get; set; } = 384;
+    public string ApiKey { get; set; } = "";
+    public string Endpoint { get; set; } = "https://api.openai.com/v1";
+    public OnnxEmbeddingSettings Onnx { get; set; } = new();
+}
+
+public class OnnxEmbeddingSettings
+{
+    /// <summary>Directory containing model.onnx and vocab.txt (relative to content root or absolute).</summary>
+    public string ModelDirectory { get; set; } = "models/bge-small-en-v1.5";
+    public int MaxSequenceLength { get; set; } = 512;
+    public string QueryInstruction { get; set; } = "Represent this sentence for searching: ";
 }
 
 public class OpenAiSettings
@@ -66,8 +86,11 @@ public class AiFeaturesConfiguration
     public bool EnableClassification { get; set; } = false;
     public AiRateLimitConfiguration ClassifyRateLimit { get; set; } = new();
     public ClassificationConfiguration Classification { get; set; } = new();
+    public bool EnableEmbeddings { get; set; } = false;
     public bool EnableSemanticSearch { get; set; } = false;
+    public AiRateLimitConfiguration SemanticSearchRateLimit { get; set; } = new();
     public bool EnableRag { get; set; } = false;
+    public AiRateLimitConfiguration RagRateLimit { get; set; } = new();
     public bool EnableFunctionCalling { get; set; } = false;
     public bool EnableAgents { get; set; } = false;
     public bool EnableMcp { get; set; } = false;
