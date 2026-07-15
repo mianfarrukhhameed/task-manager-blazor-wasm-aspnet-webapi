@@ -25,6 +25,12 @@ public class AgentsSettings
 {
     /// <summary>Optional chat model for MAF agents only (does not change classify/summarize/RAG).</summary>
     public string ChatModel { get; set; } = "";
+
+    /// <summary>
+    /// <c>Multi</c> = Analyst → Planner sequential workflow (default).
+    /// <c>Single</c> = one agent with all tools.
+    /// </summary>
+    public string WorkflowMode { get; set; } = "Multi";
 }
 
 public class EmbeddingSettings
