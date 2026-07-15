@@ -9,14 +9,14 @@
   <Authorizing>
     <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mx-2" />
   </Authorizing>
-  <Authorized>
+  <Authorized Context="authState">
     <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-      <ActivatorContent>
+      <ActivatorContent Context="_">
         <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" />
       </ActivatorContent>
       <ChildContent>
         <MudMenuItem Disabled="true">
-          <MudText Typo="Typo.body2">@context.User.Identity?.Name</MudText>
+          <MudText Typo="Typo.body2">@authState.User.Identity?.Name</MudText>
         </MudMenuItem>
         <MudDivider />
         <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="BeginSignOut">Log out</MudMenuItem>
