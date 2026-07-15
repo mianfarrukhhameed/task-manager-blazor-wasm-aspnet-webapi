@@ -199,5 +199,45 @@ namespace Fistix.TaskManager.WebApp.Services.DataServices
 
       return result;
     }
+
+    public async Task<ApiCallResult<ProposeAiToolsResponseDto>> ProposeAiTools(string prompt)
+    {
+      var result = new ApiCallResult<ProposeAiToolsResponseDto>();
+      var command = new ProposeAiToolsCommand { Prompt = prompt };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/propose-tools", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<ProposeAiToolsResponseDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
+
+    public async Task<ApiCallResult<ExecuteAiToolsResponseDto>> ExecuteAiTools(List<ProposedToolCallDto> confirmedCalls)
+    {
+      var result = new ApiCallResult<ExecuteAiToolsResponseDto>();
+      var command = new ExecuteAiToolsCommand { ConfirmedCalls = confirmedCalls };
+
+      var response = await _httpClient.PostAsJsonAsync("api/ai/execute-tools", command);
+      if (response.IsSuccessStatusCode)
+      {
+        result.Payload = await response.Content.ReadFromJsonAsync<ExecuteAiToolsResponseDto>();
+        result.IsSucceed = true;
+      }
+      else
+      {
+        result.IsSucceed = false;
+        result.Message = await response.GetErrorMessage();
+      }
+
+      return result;
+    }
   }
 }

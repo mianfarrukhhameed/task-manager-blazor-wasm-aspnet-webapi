@@ -14,6 +14,7 @@ namespace Fistix.TaskManager.DataLayer
     public DbSet<TodoAiMetadata> TodoAiMetadatas { get; set; }
     public DbSet<TodoEmbedding> TodoEmbeddings { get; set; }
     public DbSet<AiConversation> AiConversations { get; set; }
+    public DbSet<ToolExecutionLog> ToolExecutionLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,6 +27,7 @@ namespace Fistix.TaskManager.DataLayer
       TodoAiMetadataModelConfig(modelBuilder);
       TodoEmbeddingModelConfig(modelBuilder);
       AiConversationModelConfig(modelBuilder);
+      ToolExecutionLogModelConfig(modelBuilder);
     }
 
     private void TodoTaskModelConfig(ModelBuilder modelBuilder)
@@ -99,6 +101,20 @@ namespace Fistix.TaskManager.DataLayer
         entityModel.Property(p => p.Model).HasMaxLength(100);
         entityModel.HasIndex(p => p.UserId);
         entityModel.HasIndex(p => p.CreatedAt);
+      });
+    }
+
+    private void ToolExecutionLogModelConfig(ModelBuilder modelBuilder)
+    {
+      modelBuilder.Entity<ToolExecutionLog>(entityModel =>
+      {
+        entityModel.ToTable("ToolExecutionLog");
+        entityModel.HasKey(k => k.Id);
+        entityModel.Property(p => p.UserId).HasMaxLength(256).IsRequired();
+        entityModel.Property(p => p.ToolName).HasMaxLength(100).IsRequired();
+        entityModel.HasIndex(p => p.UserId);
+        entityModel.HasIndex(p => p.ExecutedAt);
+        entityModel.HasIndex(p => p.ToolName);
       });
     }
   }
