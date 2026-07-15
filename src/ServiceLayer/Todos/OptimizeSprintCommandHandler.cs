@@ -19,7 +19,6 @@ namespace Fistix.TaskManager.ServiceLayer.Todos;
 
 public class OptimizeSprintCommandHandler : IRequestHandler<OptimizeSprintCommand, OptimizeSprintCommandResult>
 {
-    private readonly ITodoTaskRepository _todoTaskRepository;
     private readonly ISprintRepository _sprintRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly SprintOptimizerAgent _agent;
@@ -27,14 +26,12 @@ public class OptimizeSprintCommandHandler : IRequestHandler<OptimizeSprintComman
     private readonly ILogger<OptimizeSprintCommandHandler> _logger;
 
     public OptimizeSprintCommandHandler(
-        ITodoTaskRepository todoTaskRepository,
         ISprintRepository sprintRepository,
         ICurrentUserService currentUserService,
         SprintOptimizerAgent agent,
         AiConfiguration aiConfig,
         ILogger<OptimizeSprintCommandHandler> logger)
     {
-        _todoTaskRepository = todoTaskRepository;
         _sprintRepository = sprintRepository;
         _currentUserService = currentUserService;
         _agent = agent;
@@ -52,53 +49,68 @@ public class OptimizeSprintCommandHandler : IRequestHandler<OptimizeSprintComman
         }
 
         var userId = TodoAccessGuard.RequireCurrentUserId(_currentUserService);
-        var todos = await _todoTaskRepository.GetByOwner(userId, cancellationToken);
-        var candidates = todos
-            .Where(IsCandidate)
-            .OrderBy(t => string.Equals(t.Priority, "High", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(t => t.DueDate)
-            .ToList();
 
-        _logger.LogInformation(
-            "Sprint optimizer found {CandidateCount} candidate todos for user {UserId}",
-            candidates.Count,
-            userId);
+        _logger.LogInformation("Running MAF sprint planning agent for user {UserId}", userId);
 
-        var plan = await _agent.PlanAsync(candidates, command.MaxTasks, command.DurationDays, cancellationToken);
+        var plan = await _agent.PlanAsync(
+            userId,
+            command.MaxTasks,
+            command.DurationDays,
+            command.Name,
+            cancellationToken);
 
-        var startDate = DateTime.UtcNow.Date;
-        var endDate = startDate.AddDays(command.DurationDays);
-        var name = string.IsNullOrWhiteSpace(command.Name)
-            ? $"Optimized Sprint {startDate:yyyy-MM-dd}"
-            : command.Name.Trim();
+        Guid sprintId;
+        string sprintName;
+        DateTime startDate;
+        DateTime endDate;
 
-        var sprint = new Sprint
+        if (plan.CreatedSprintId.HasValue
+            && plan.CreatedStartDate.HasValue
+            && plan.CreatedEndDate.HasValue)
         {
-            Name = name,
-            StartDate = startDate,
-            EndDate = endDate,
-            CreatedByUserId = userId,
-            CreatedAt = DateTime.UtcNow,
-            Reasoning = plan.Reasoning
-        };
-        sprint.GenerateNewExternalId();
-
-        foreach (var todo in plan.SelectedTodos)
-        {
-            sprint.SprintTodos.Add(new SprintTodo { TodoId = todo.Id });
+            sprintId = plan.CreatedSprintId.Value;
+            sprintName = plan.CreatedSprintName ?? $"Optimized Sprint {plan.CreatedStartDate:yyyy-MM-dd}";
+            startDate = plan.CreatedStartDate.Value;
+            endDate = plan.CreatedEndDate.Value;
         }
+        else
+        {
+            startDate = DateTime.UtcNow.Date;
+            endDate = startDate.AddDays(command.DurationDays);
+            sprintName = string.IsNullOrWhiteSpace(command.Name)
+                ? $"Optimized Sprint {startDate:yyyy-MM-dd}"
+                : command.Name.Trim();
 
-        await _sprintRepository.Create(sprint, cancellationToken);
+            var sprint = new Sprint
+            {
+                Name = sprintName,
+                StartDate = startDate,
+                EndDate = endDate,
+                CreatedByUserId = userId,
+                CreatedAt = DateTime.UtcNow,
+                Reasoning = plan.Reasoning
+            };
+            sprint.GenerateNewExternalId();
+
+            foreach (var todo in plan.SelectedTodos)
+            {
+                sprint.SprintTodos.Add(new SprintTodo { TodoId = todo.Id });
+            }
+
+            await _sprintRepository.Create(sprint, cancellationToken);
+            sprintId = sprint.ExternalId;
+        }
 
         return new OptimizeSprintCommandResult
         {
             Payload = new OptimizeSprintResponseDto
             {
-                SprintId = sprint.ExternalId,
-                Name = sprint.Name,
-                StartDate = sprint.StartDate,
-                EndDate = sprint.EndDate,
+                SprintId = sprintId,
+                Name = sprintName,
+                StartDate = startDate,
+                EndDate = endDate,
                 Reasoning = plan.Reasoning,
+                Steps = plan.Steps,
                 SelectedTasks = plan.SelectedTodos.Select(t => new SprintTaskSummaryDto
                 {
                     ExternalId = t.ExternalId,
@@ -110,16 +122,5 @@ public class OptimizeSprintCommandHandler : IRequestHandler<OptimizeSprintComman
                 }).ToList()
             }
         };
-    }
-
-    private static bool IsCandidate(TodoTask todo)
-    {
-        if (string.Equals(todo.Status, "Completed", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return string.Equals(todo.Priority, "High", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(todo.Priority, "Medium", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -128,6 +128,22 @@ else
           Sprint id: <code>@_sprintResult.SprintId</code>
           · @_sprintResult.StartDate.ToString("yyyy-MM-dd") – @_sprintResult.EndDate.ToString("yyyy-MM-dd")
         </div>
+        @if (_sprintResult.Steps.Count > 0)
+        {
+          <div class="fw-semibold mb-2">Agent steps (Microsoft Agent Framework)</div>
+          <ol class="small mb-3">
+            @foreach (var step in _sprintResult.Steps)
+            {
+              <li>
+                <code>@step.ToolName</code>
+                @if (!string.IsNullOrWhiteSpace(step.Summary))
+                {
+                  <span class="text-muted"> — @step.Summary</span>
+                }
+              </li>
+            }
+          </ol>
+        }
         <p style="white-space: pre-wrap;">@_sprintResult.Reasoning</p>
         @if (_sprintResult.SelectedTasks.Count == 0)
         {

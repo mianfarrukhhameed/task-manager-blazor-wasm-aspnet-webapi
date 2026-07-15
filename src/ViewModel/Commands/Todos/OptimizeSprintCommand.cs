@@ -27,4 +27,12 @@ public class OptimizeSprintResponseDto
     public DateTime EndDate { get; set; }
     public List<SprintTaskSummaryDto> SelectedTasks { get; set; } = new();
     public string Reasoning { get; set; } = string.Empty;
+    /// <summary>Ordered tool invocations from the Microsoft Agent Framework run (demo trail).</summary>
+    public List<AgentStepDto> Steps { get; set; } = new();
+}
+
+public class AgentStepDto
+{
+    public string ToolName { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
 }
