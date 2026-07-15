@@ -1,5 +1,6 @@
 using System;
 using Fistix.TaskManager.AiLayer.Abstractions;
+using Fistix.TaskManager.AiLayer.Agents;
 using Fistix.TaskManager.AiLayer.Implementations;
 using Fistix.TaskManager.AiLayer.Shared;
 using Fistix.TaskManager.AiLayer.Tools;
@@ -32,6 +33,7 @@ public static class AiServiceExtension
         });
 
         services.AddSingleton<ILlmProviderService, SemanticKernelLlmProvider>();
+        services.AddSingleton<AiChatClientFactory>();
         services.AddScoped<SummarizationPipeline>();
         services.AddScoped<ClassificationPipeline>();
         services.AddScoped<SemanticSearchPipeline>();

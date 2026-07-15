@@ -1,186 +1,222 @@
 #nullable enable
 
-using Fistix.TaskManager.AiLayer.Abstractions;
-using Fistix.TaskManager.AiLayer.Shared;
+using Fistix.TaskManager.AiLayer.Agents;
+using Fistix.TaskManager.Core.Abstractions.Repositories;
 using Fistix.TaskManager.Core.DomainModel.Aggregates;
+using Fistix.TaskManager.ViewModel.Commands.Todos;
+using Fistix.TaskManager.ViewModel.Dtos;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Fistix.TaskManager.ServiceLayer.Todos;
 
 /// <summary>
-/// Simplified ReAct-style sprint planner: observe candidate todos, reason via LLM, act by returning a selection.
+/// Microsoft Agent Framework sprint planner: multi-step tool use then create_sprint.
+/// Falls back to heuristic selection when the agent run fails.
 /// </summary>
 public class SprintOptimizerAgent
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
+    private const string Instructions = """
+        You are a sprint planning agent for a task manager.
+        You MUST use tools — do not invent todo GUIDs.
+        Suggested flow:
+        1) search_incomplete_todos
+        2) get_workload_stats and/or find_due_soon_todos
+        3) propose_sprint_plan with a comma-separated list of real todo ids and brief reasoning
+        4) create_sprint to persist the plan
+        Prefer High priority, earlier due dates, and thematic grouping.
+        Respect max task and duration constraints exposed by the tools.
+        After tools finish, give a short final summary for the user.
+        """;
 
-    private readonly ILlmProviderService _llm;
+    private readonly AiChatClientFactory _chatClientFactory;
+    private readonly SprintPlanningTools _tools;
+    private readonly ITodoTaskRepository _todoTaskRepository;
     private readonly ILogger<SprintOptimizerAgent> _logger;
 
-    public SprintOptimizerAgent(ILlmProviderService llm, ILogger<SprintOptimizerAgent> logger)
+    public SprintOptimizerAgent(
+        AiChatClientFactory chatClientFactory,
+        SprintPlanningTools tools,
+        ITodoTaskRepository todoTaskRepository,
+        ILogger<SprintOptimizerAgent> logger)
     {
-        _llm = llm;
+        _chatClientFactory = chatClientFactory;
+        _tools = tools;
+        _todoTaskRepository = todoTaskRepository;
         _logger = logger;
     }
 
     public async Task<SprintOptimizationPlan> PlanAsync(
-        IReadOnlyList<TodoTask> candidates,
+        Guid ownerId,
+        int maxTasks,
+        int durationDays,
+        string? name,
+        CancellationToken cancellationToken)
+    {
+        await _tools.ConfigureAsync(ownerId, maxTasks, durationDays, name, cancellationToken);
+
+        try
+        {
+            var chatClient = _chatClientFactory.CreateChatClient();
+            AIAgent agent = chatClient.AsAIAgent(
+                instructions: Instructions,
+                name: "SprintPlanningAgent",
+                description: "Plans and creates an optimized sprint using todo tools.",
+                tools:
+                [
+                    AIFunctionFactory.Create(_tools.SearchIncompleteTodos),
+                    AIFunctionFactory.Create(_tools.GetWorkloadStats),
+                    AIFunctionFactory.Create(_tools.FindDueSoonTodos),
+                    AIFunctionFactory.Create(_tools.ProposeSprintPlan),
+                    AIFunctionFactory.Create(_tools.CreateSprint)
+                ]);
+
+            var goal =
+                $"Plan and create a sprint lasting {durationDays} days with at most {maxTasks} tasks. " +
+                (string.IsNullOrWhiteSpace(name) ? "" : $"Use sprint name '{name.Trim()}'. ") +
+                "Use your tools to inspect workload, propose a selection, then call create_sprint.";
+
+            var response = await agent.RunAsync(goal, cancellationToken: cancellationToken);
+            EnsureToolStepsPresent(response);
+
+            if (_tools.CreatedSprintId.HasValue && _tools.SelectedTodos.Count > 0)
+            {
+                return BuildPlanFromTools(response.Text, includeCreated: true);
+            }
+
+            if (_tools.SelectedTodos.Count > 0)
+            {
+                _logger.LogWarning("MAF agent proposed tasks but did not create sprint; handler will persist.");
+                return BuildPlanFromTools(response.Text, includeCreated: false);
+            }
+
+            _logger.LogWarning("MAF sprint agent did not select tasks; falling back to heuristic.");
+        }
+        catch (System.ClientModel.ClientResultException ex)
+        {
+            var body = TryReadErrorBody(ex);
+            _logger.LogWarning(
+                ex,
+                "MAF sprint agent failed with HTTP {Status}; falling back to heuristic. Body: {Body}",
+                ex.Status,
+                body);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "MAF sprint agent failed; falling back to heuristic selection");
+        }
+
+        return await HeuristicFallbackAsync(ownerId, maxTasks, durationDays, cancellationToken);
+    }
+
+    private SprintOptimizationPlan BuildPlanFromTools(string? agentText, bool includeCreated) =>
+        new()
+        {
+            SelectedTodos = _tools.SelectedTodos.ToList(),
+            Reasoning = BuildReasoning(agentText, _tools.LastProposeReasoning),
+            Steps = _tools.Steps.ToList(),
+            CreatedSprintId = includeCreated ? _tools.CreatedSprintId : null,
+            CreatedSprintName = includeCreated ? _tools.CreatedSprintName : null,
+            CreatedStartDate = includeCreated ? _tools.CreatedStartDate : null,
+            CreatedEndDate = includeCreated ? _tools.CreatedEndDate : null
+        };
+
+    private async Task<SprintOptimizationPlan> HeuristicFallbackAsync(
+        Guid ownerId,
         int maxTasks,
         int durationDays,
         CancellationToken cancellationToken)
     {
-        if (candidates.Count == 0)
-        {
-            return new SprintOptimizationPlan
-            {
-                SelectedTodos = [],
-                Reasoning = "No high/medium priority incomplete tasks were available to plan a sprint."
-            };
-        }
-
-        var cappedMax = Math.Min(maxTasks, candidates.Count);
-        var prompt = BuildPrompt(candidates, cappedMax, durationDays);
-
-        try
-        {
-            var raw = await _llm.GetCompletionAsync(prompt, cancellationToken);
-            var parsed = ParseResponse(raw, candidates, cappedMax);
-            if (parsed.SelectedTodos.Count > 0)
-            {
-                return parsed;
-            }
-
-            _logger.LogWarning("Sprint optimizer LLM returned no valid task ids; falling back to heuristic selection");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Sprint optimizer LLM call failed; falling back to heuristic selection");
-        }
-
-        return HeuristicSelect(candidates, cappedMax, durationDays);
-    }
-
-    private static string BuildPrompt(IReadOnlyList<TodoTask> candidates, int maxTasks, int durationDays)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("You are a sprint planning assistant.");
-        sb.AppendLine($"Select up to {maxTasks} tasks for a {durationDays}-day sprint.");
-        sb.AppendLine("Prefer High priority over Medium, earlier due dates, and thematic grouping.");
-        sb.AppendLine("Only choose from the candidate list. Respond with JSON only:");
-        sb.AppendLine("""{"selectedTaskIds":["guid",...],"reasoning":"brief explanation of grouping and balance"}""");
-        sb.AppendLine();
-        sb.AppendLine("Candidates:");
-
-        foreach (var todo in candidates)
-        {
-            var title = PromptInputSanitizer.SanitizeAndTruncate(todo.Title, 200);
-            var description = PromptInputSanitizer.SanitizeAndTruncate(todo.Description, 300);
-            var category = PromptInputSanitizer.SanitizeAndTruncate(todo.Category, 80);
-            sb.AppendLine(
-                $"- id={todo.ExternalId}; priority={todo.Priority}; status={todo.Status}; " +
-                $"due={todo.DueDate:yyyy-MM-dd}; category={category}; title={title}; description={description}");
-        }
-
-        return sb.ToString();
-    }
-
-    private SprintOptimizationPlan ParseResponse(string raw, IReadOnlyList<TodoTask> candidates, int maxTasks)
-    {
-        var json = ExtractJsonObject(raw);
-        var parsed = JsonSerializer.Deserialize<LlmSprintPlanResponse>(json, JsonOptions);
-        if (parsed?.SelectedTaskIds is null || parsed.SelectedTaskIds.Count == 0)
-        {
-            return new SprintOptimizationPlan { SelectedTodos = [], Reasoning = parsed?.Reasoning ?? string.Empty };
-        }
-
-        var byId = candidates.ToDictionary(t => t.ExternalId);
-        var selected = new List<TodoTask>();
-        foreach (var id in parsed.SelectedTaskIds.Distinct())
-        {
-            if (byId.TryGetValue(id, out var todo))
-            {
-                selected.Add(todo);
-            }
-
-            if (selected.Count >= maxTasks)
-            {
-                break;
-            }
-        }
-
-        return new SprintOptimizationPlan
-        {
-            SelectedTodos = selected,
-            Reasoning = string.IsNullOrWhiteSpace(parsed.Reasoning)
-                ? "Selected tasks based on model recommendation."
-                : parsed.Reasoning.Trim()
-        };
-    }
-
-    private static SprintOptimizationPlan HeuristicSelect(
-        IReadOnlyList<TodoTask> candidates,
-        int maxTasks,
-        int durationDays)
-    {
-        var selected = candidates
-            .OrderBy(t => PriorityRank(t.Priority))
+        var todos = await _todoTaskRepository.GetByOwner(ownerId, cancellationToken);
+        var selected = todos
+            .Where(SprintPlanningTools.IsCandidate)
+            .OrderBy(t => string.Equals(t.Priority, "High", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ThenBy(t => t.DueDate)
-            .Take(maxTasks)
+            .Take(Math.Clamp(maxTasks, 1, 50))
             .ToList();
 
+        var reasoning =
+            $"Selected {selected.Count} high/medium tasks for a {durationDays}-day sprint " +
+            "using priority and due-date ordering (agent unavailable or invalid tool outcome).";
+
+        var steps = _tools.Steps.ToList();
+        steps.Add(new AgentStepDto { ToolName = "heuristic_fallback", Summary = reasoning });
+
         return new SprintOptimizationPlan
         {
             SelectedTodos = selected,
-            Reasoning =
-                $"Selected {selected.Count} high/medium tasks for a {durationDays}-day sprint " +
-                "using priority and due-date ordering (LLM unavailable or invalid response)."
+            Reasoning = reasoning,
+            Steps = steps
         };
     }
 
-    private static int PriorityRank(string? priority) =>
-        string.Equals(priority, "High", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
-
-    private static string ExtractJsonObject(string raw)
+    private void EnsureToolStepsPresent(AgentResponse response)
     {
-        var trimmed = raw.Trim();
-        if (trimmed.StartsWith("{", StringComparison.Ordinal))
+        if (response.Messages is null)
         {
-            return trimmed;
+            return;
         }
 
-        var fenced = Regex.Match(trimmed, @"```(?:json)?\s*(\{[\s\S]*?\})\s*```", RegexOptions.IgnoreCase);
-        if (fenced.Success)
+        foreach (var message in response.Messages)
         {
-            return fenced.Groups[1].Value;
-        }
+            foreach (var content in message.Contents)
+            {
+                if (content is not FunctionCallContent call || string.IsNullOrWhiteSpace(call.Name))
+                {
+                    continue;
+                }
 
-        var start = trimmed.IndexOf('{');
-        var end = trimmed.LastIndexOf('}');
-        if (start >= 0 && end > start)
-        {
-            return trimmed[start..(end + 1)];
+                if (!_tools.Steps.Any(s => string.Equals(s.ToolName, call.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _tools.Steps.Add(new AgentStepDto
+                    {
+                        ToolName = call.Name,
+                        Summary = "Invoked by agent."
+                    });
+                }
+            }
         }
-
-        return trimmed;
     }
 
-    private sealed class LlmSprintPlanResponse
+    private static string BuildReasoning(string? agentText, string proposeReasoning)
     {
-        public List<Guid> SelectedTaskIds { get; set; } = [];
-        public string? Reasoning { get; set; }
+        if (!string.IsNullOrWhiteSpace(agentText))
+        {
+            return agentText.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(proposeReasoning)
+            ? "Sprint planned by agent."
+            : proposeReasoning;
+    }
+
+    private static string TryReadErrorBody(System.ClientModel.ClientResultException ex)
+    {
+        try
+        {
+            // Prefer explicit content when the SDK exposes it; otherwise fall back to message text.
+            var contentProp = ex.GetType().GetProperty("Content");
+            if (contentProp?.GetValue(ex) is BinaryData data)
+            {
+                var text = data.ToString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text.Length > 2000 ? text[..2000] + "…" : text;
+                }
+            }
+        }
+        catch
+        {
+            // ignore reflection failures
+        }
+
+        return ex.Message;
     }
 }
 
@@ -188,4 +224,9 @@ public class SprintOptimizationPlan
 {
     public List<TodoTask> SelectedTodos { get; set; } = [];
     public string Reasoning { get; set; } = string.Empty;
+    public List<AgentStepDto> Steps { get; set; } = [];
+    public Guid? CreatedSprintId { get; set; }
+    public string? CreatedSprintName { get; set; }
+    public DateTime? CreatedStartDate { get; set; }
+    public DateTime? CreatedEndDate { get; set; }
 }

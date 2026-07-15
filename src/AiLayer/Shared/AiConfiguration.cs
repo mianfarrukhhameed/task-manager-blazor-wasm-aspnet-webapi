@@ -13,7 +13,18 @@ public class AiConfiguration
     public GoogleAISettings GoogleAI { get; set; } = new();
     public ClaudeSettings Claude { get; set; } = new();
     public EmbeddingSettings Embedding { get; set; } = new();
+    public AgentsSettings Agents { get; set; } = new();
     public AiFeaturesConfiguration Features { get; set; } = new();
+}
+
+/// <summary>
+/// Microsoft Agent Framework / tool-calling agent settings.
+/// ChatModel overrides the provider default when set (recommended for Gemini 3 + OpenAI-compat).
+/// </summary>
+public class AgentsSettings
+{
+    /// <summary>Optional chat model for MAF agents only (does not change classify/summarize/RAG).</summary>
+    public string ChatModel { get; set; } = "";
 }
 
 public class EmbeddingSettings
