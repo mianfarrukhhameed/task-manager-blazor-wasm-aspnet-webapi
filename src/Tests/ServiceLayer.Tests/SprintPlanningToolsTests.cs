@@ -19,7 +19,7 @@ public class SprintPlanningToolsTests
         var todos = new FakeTodoRepository([t1, t2]);
         var sprints = new FakeSprintRepository();
         var tools = new SprintPlanningTools(todos, sprints);
-        await tools.ConfigureAsync(ownerId, maxTasks: 1, durationDays: 14, name: null, CancellationToken.None);
+        await tools.ConfigureAsync(ownerId, maxTasks: 1, durationDays: 14, name: null, multiAgent: true, CancellationToken.None);
 
         var json = tools.ProposeSprintPlan(
             $"{t1.ExternalId},{t2.ExternalId},{Guid.NewGuid()}",
@@ -28,7 +28,7 @@ public class SprintPlanningToolsTests
         Assert.Contains("\"acceptedCount\":1", json);
         Assert.Single(tools.SelectedTodos);
         Assert.Equal(t1.ExternalId, tools.SelectedTodos[0].ExternalId);
-        Assert.Contains(tools.Steps, s => s.ToolName == "propose_sprint_plan");
+        Assert.Contains(tools.Steps, s => s.ToolName == "propose_sprint_plan" && s.AgentName == "Planner");
     }
 
     private static TodoTask MakeTodo(Guid ownerId, string priority)

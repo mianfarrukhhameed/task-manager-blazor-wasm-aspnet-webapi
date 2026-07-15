@@ -1,11 +1,13 @@
 #nullable enable
 
 using Fistix.TaskManager.AiLayer.Agents;
+using Fistix.TaskManager.AiLayer.Shared;
 using Fistix.TaskManager.Core.Abstractions.Repositories;
 using Fistix.TaskManager.Core.DomainModel.Aggregates;
 using Fistix.TaskManager.ViewModel.Commands.Todos;
 using Fistix.TaskManager.ViewModel.Dtos;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System;
@@ -17,12 +19,34 @@ using System.Threading.Tasks;
 namespace Fistix.TaskManager.ServiceLayer.Todos;
 
 /// <summary>
-/// Microsoft Agent Framework sprint planner: multi-step tool use then create_sprint.
+/// Microsoft Agent Framework sprint planner.
+/// Default: Analyst → Planner sequential workflow. Optional single-agent mode via Ai:Agents:WorkflowMode.
 /// Falls back to heuristic selection when the agent run fails.
 /// </summary>
 public class SprintOptimizerAgent
 {
-    private const string Instructions = """
+    private const string AnalystInstructions = """
+        You are the sprint workload Analyst for a task manager.
+        You MUST use tools — do not invent todo GUIDs.
+        Call search_incomplete_todos, get_workload_stats, and find_due_soon_todos.
+        Then write a concise analysis for the Planner that includes:
+        - Recommended todo external ids (comma-separated, real ids only)
+        - Risks (overdue, overload, missing due-soon coverage)
+        - Suggested sprint theme / grouping
+        Do NOT call propose_sprint_plan or create_sprint — that is the Planner's job.
+        """;
+
+    private const string PlannerInstructions = """
+        You are the sprint Planner for a task manager.
+        You receive the Analyst's report. You MUST use tools — do not invent todo GUIDs.
+        1) propose_sprint_plan with comma-separated real todo ids and brief reasoning
+        2) create_sprint to persist
+        Prefer High priority, earlier due dates, and the Analyst's recommendations.
+        Respect max task and duration constraints exposed by the tools.
+        After tools finish, give a short final summary for the user.
+        """;
+
+    private const string SingleAgentInstructions = """
         You are a sprint planning agent for a task manager.
         You MUST use tools — do not invent todo GUIDs.
         Suggested flow:
@@ -38,17 +62,20 @@ public class SprintOptimizerAgent
     private readonly AiChatClientFactory _chatClientFactory;
     private readonly SprintPlanningTools _tools;
     private readonly ITodoTaskRepository _todoTaskRepository;
+    private readonly AiConfiguration _aiConfig;
     private readonly ILogger<SprintOptimizerAgent> _logger;
 
     public SprintOptimizerAgent(
         AiChatClientFactory chatClientFactory,
         SprintPlanningTools tools,
         ITodoTaskRepository todoTaskRepository,
+        AiConfiguration aiConfig,
         ILogger<SprintOptimizerAgent> logger)
     {
         _chatClientFactory = chatClientFactory;
         _tools = tools;
         _todoTaskRepository = todoTaskRepository;
+        _aiConfig = aiConfig;
         _logger = logger;
     }
 
@@ -59,30 +86,18 @@ public class SprintOptimizerAgent
         string? name,
         CancellationToken cancellationToken)
     {
-        await _tools.ConfigureAsync(ownerId, maxTasks, durationDays, name, cancellationToken);
+        var multi = IsMultiAgentMode();
+        await _tools.ConfigureAsync(ownerId, maxTasks, durationDays, name, multi, cancellationToken);
 
         try
         {
             var chatClient = _chatClientFactory.CreateChatClient();
-            AIAgent agent = chatClient.AsAIAgent(
-                instructions: Instructions,
-                name: "SprintPlanningAgent",
-                description: "Plans and creates an optimized sprint using todo tools.",
-                tools:
-                [
-                    AIFunctionFactory.Create(_tools.SearchIncompleteTodos),
-                    AIFunctionFactory.Create(_tools.GetWorkloadStats),
-                    AIFunctionFactory.Create(_tools.FindDueSoonTodos),
-                    AIFunctionFactory.Create(_tools.ProposeSprintPlan),
-                    AIFunctionFactory.Create(_tools.CreateSprint)
-                ]);
+            var goal = BuildGoal(maxTasks, durationDays, name);
 
-            var goal =
-                $"Plan and create a sprint lasting {durationDays} days with at most {maxTasks} tasks. " +
-                (string.IsNullOrWhiteSpace(name) ? "" : $"Use sprint name '{name.Trim()}'. ") +
-                "Use your tools to inspect workload, propose a selection, then call create_sprint.";
+            AgentResponse response = multi
+                ? await RunMultiAgentWorkflowAsync(chatClient, goal, cancellationToken)
+                : await RunSingleAgentAsync(chatClient, goal, cancellationToken);
 
-            var response = await agent.RunAsync(goal, cancellationToken: cancellationToken);
             EnsureToolStepsPresent(response);
 
             if (_tools.CreatedSprintId.HasValue && _tools.SelectedTodos.Count > 0)
@@ -115,6 +130,88 @@ public class SprintOptimizerAgent
         return await HeuristicFallbackAsync(ownerId, maxTasks, durationDays, cancellationToken);
     }
 
+    private async Task<AgentResponse> RunMultiAgentWorkflowAsync(
+        IChatClient chatClient,
+        string goal,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Running MAF Analyst → Planner sequential workflow");
+
+        AIAgent analyst = chatClient.AsAIAgent(
+            instructions: AnalystInstructions,
+            name: "SprintAnalyst",
+            description: "Analyzes incomplete todos and workload for sprint planning.",
+            tools:
+            [
+                AIFunctionFactory.Create(_tools.SearchIncompleteTodos),
+                AIFunctionFactory.Create(_tools.GetWorkloadStats),
+                AIFunctionFactory.Create(_tools.FindDueSoonTodos)
+            ]);
+
+        AIAgent planner = chatClient.AsAIAgent(
+            instructions: PlannerInstructions,
+            name: "SprintPlanner",
+            description: "Proposes and creates a sprint from the Analyst report.",
+            tools:
+            [
+                AIFunctionFactory.Create(_tools.ProposeSprintPlan),
+                AIFunctionFactory.Create(_tools.CreateSprint)
+            ]);
+
+        // chainOnlyAgentResponses: Planner gets Analyst's text brief, not the full tool transcript
+        // (helps OpenAI-compat providers that struggle with long tool-history replays).
+        var workflow = AgentWorkflowBuilder.BuildSequential(
+            chainOnlyAgentResponses: true,
+            agents: [analyst, planner]);
+
+        AIAgent hosted = workflow.AsAIAgent(
+            name: "SprintPlanningWorkflow",
+            description: "Sequential Analyst → Planner sprint planning workflow.");
+
+        _tools.Steps.Add(new AgentStepDto
+        {
+            AgentName = "Workflow",
+            ToolName = "sequential_start",
+            Summary = "Analyst → Planner"
+        });
+
+        return await hosted.RunAsync(goal, cancellationToken: cancellationToken);
+    }
+
+    private async Task<AgentResponse> RunSingleAgentAsync(
+        IChatClient chatClient,
+        string goal,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Running MAF single sprint planning agent");
+
+        AIAgent agent = chatClient.AsAIAgent(
+            instructions: SingleAgentInstructions,
+            name: "SprintPlanningAgent",
+            description: "Plans and creates an optimized sprint using todo tools.",
+            tools:
+            [
+                AIFunctionFactory.Create(_tools.SearchIncompleteTodos),
+                AIFunctionFactory.Create(_tools.GetWorkloadStats),
+                AIFunctionFactory.Create(_tools.FindDueSoonTodos),
+                AIFunctionFactory.Create(_tools.ProposeSprintPlan),
+                AIFunctionFactory.Create(_tools.CreateSprint)
+            ]);
+
+        return await agent.RunAsync(goal, cancellationToken: cancellationToken);
+    }
+
+    private bool IsMultiAgentMode()
+    {
+        var mode = _aiConfig.Agents?.WorkflowMode?.Trim() ?? "Multi";
+        return !string.Equals(mode, "Single", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildGoal(int maxTasks, int durationDays, string? name) =>
+        $"Plan and create a sprint lasting {durationDays} days with at most {maxTasks} tasks. " +
+        (string.IsNullOrWhiteSpace(name) ? "" : $"Use sprint name '{name.Trim()}'. ") +
+        "Analyst: inspect workload and recommend real todo ids. Planner: propose then create_sprint.";
+
     private SprintOptimizationPlan BuildPlanFromTools(string? agentText, bool includeCreated) =>
         new()
         {
@@ -146,7 +243,12 @@ public class SprintOptimizerAgent
             "using priority and due-date ordering (agent unavailable or invalid tool outcome).";
 
         var steps = _tools.Steps.ToList();
-        steps.Add(new AgentStepDto { ToolName = "heuristic_fallback", Summary = reasoning });
+        steps.Add(new AgentStepDto
+        {
+            AgentName = "Heuristic",
+            ToolName = "heuristic_fallback",
+            Summary = reasoning
+        });
 
         return new SprintOptimizationPlan
         {
@@ -176,6 +278,7 @@ public class SprintOptimizerAgent
                 {
                     _tools.Steps.Add(new AgentStepDto
                     {
+                        AgentName = _tools.UseMultiAgentLabels ? "Workflow" : "SprintAgent",
                         ToolName = call.Name,
                         Summary = "Invoked by agent."
                     });
@@ -200,7 +303,6 @@ public class SprintOptimizerAgent
     {
         try
         {
-            // Prefer explicit content when the SDK exposes it; otherwise fall back to message text.
             var contentProp = ex.GetType().GetProperty("Content");
             if (contentProp?.GetValue(ex) is BinaryData data)
             {

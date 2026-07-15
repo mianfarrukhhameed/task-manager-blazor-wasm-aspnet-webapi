@@ -131,12 +131,12 @@ else
         <a class="btn btn-sm btn-outline-primary mb-3" href="@($"sprints/{_sprintResult.SprintId}")">Open sprint details</a>
         @if (_sprintResult.Steps.Count > 0)
         {
-          <div class="fw-semibold mb-2">Agent steps (Microsoft Agent Framework)</div>
+          <div class="fw-semibold mb-2">Agent steps (Analyst → Planner workflow)</div>
           <ol class="small mb-3">
             @foreach (var step in _sprintResult.Steps)
             {
               <li>
-                <code>@step.ToolName</code>
+                <code>@step.AgentName</code>/<code>@step.ToolName</code>
                 @if (!string.IsNullOrWhiteSpace(step.Summary))
                 {
                   <span class="text-muted"> — @step.Summary</span>

@@ -33,6 +33,8 @@ public class OptimizeSprintResponseDto
 
 public class AgentStepDto
 {
+    /// <summary>Analyst, Planner, SprintAgent, or heuristic_fallback.</summary>
+    public string AgentName { get; set; } = string.Empty;
     public string ToolName { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
 }

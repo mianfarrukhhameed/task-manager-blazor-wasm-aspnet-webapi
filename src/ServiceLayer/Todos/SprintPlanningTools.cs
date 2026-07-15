@@ -44,16 +44,21 @@ public sealed class SprintPlanningTools
     public string LastProposeReasoning { get; private set; } = string.Empty;
     public List<AgentStepDto> Steps { get; } = [];
 
+    /// <summary>When true, tool steps are labeled Analyst vs Planner; otherwise SprintAgent.</summary>
+    public bool UseMultiAgentLabels { get; private set; }
+
     public async Task ConfigureAsync(
         Guid ownerId,
         int maxTasks,
         int durationDays,
         string? name,
+        bool multiAgent,
         CancellationToken cancellationToken)
     {
         _ownerId = ownerId;
         _maxTasks = Math.Clamp(maxTasks, 1, 50);
         _durationDays = Math.Clamp(durationDays, 1, 90);
+        UseMultiAgentLabels = multiAgent;
         var start = DateTime.UtcNow.Date;
         _sprintName = string.IsNullOrWhiteSpace(name)
             ? $"Optimized Sprint {start:yyyy-MM-dd}"
@@ -79,7 +84,7 @@ public sealed class SprintPlanningTools
     public string SearchIncompleteTodos()
     {
         var payload = _candidates.Select(Summarize).ToList();
-        RecordStep("search_incomplete_todos", $"Found {payload.Count} candidate todos.");
+        RecordStep("Analyst", "search_incomplete_todos", $"Found {payload.Count} candidate todos.");
         return JsonSerializer.Serialize(new { count = payload.Count, todos = payload });
     }
 
@@ -100,7 +105,7 @@ public sealed class SprintPlanningTools
             return due >= today && due < today.AddDays(_durationDays);
         });
 
-        RecordStep("get_workload_stats", $"candidates={_candidates.Count}, overdue={overdue}, dueSoon={dueSoon}");
+        RecordStep("Analyst", "get_workload_stats", $"candidates={_candidates.Count}, overdue={overdue}, dueSoon={dueSoon}");
         return JsonSerializer.Serialize(new
         {
             totalCandidates = _candidates.Count,
@@ -123,7 +128,7 @@ public sealed class SprintPlanningTools
             .Select(Summarize)
             .ToList();
 
-        RecordStep("find_due_soon_todos", $"Found {dueSoon.Count} todos due in next {_durationDays} days.");
+        RecordStep("Analyst", "find_due_soon_todos", $"Found {dueSoon.Count} todos due in next {_durationDays} days.");
         return JsonSerializer.Serialize(new { count = dueSoon.Count, todos = dueSoon });
     }
 
@@ -159,6 +164,7 @@ public sealed class SprintPlanningTools
             : reasoning.Trim();
 
         RecordStep(
+            "Planner",
             "propose_sprint_plan",
             $"accepted={selected.Count}, rejected={rejected.Count}, max={_maxTasks}");
 
@@ -177,13 +183,13 @@ public sealed class SprintPlanningTools
     {
         if (SelectedTodos.Count == 0)
         {
-            RecordStep("create_sprint", "Failed: no proposed tasks.");
+            RecordStep("Planner", "create_sprint", "Failed: no proposed tasks.");
             return JsonSerializer.Serialize(new { ok = false, error = "Call propose_sprint_plan with valid todo ids first." });
         }
 
         if (CreatedSprintId.HasValue)
         {
-            RecordStep("create_sprint", $"Already created {CreatedSprintId}");
+            RecordStep("Planner", "create_sprint", $"Already created {CreatedSprintId}");
             return JsonSerializer.Serialize(new { ok = true, sprintId = CreatedSprintId, name = CreatedSprintName });
         }
 
@@ -211,7 +217,7 @@ public sealed class SprintPlanningTools
         CreatedStartDate = sprint.StartDate;
         CreatedEndDate = sprint.EndDate;
 
-        RecordStep("create_sprint", $"Created sprint {sprint.ExternalId} with {SelectedTodos.Count} tasks.");
+        RecordStep("Planner", "create_sprint", $"Created sprint {sprint.ExternalId} with {SelectedTodos.Count} tasks.");
         return JsonSerializer.Serialize(new
         {
             ok = true,
@@ -234,8 +240,19 @@ public sealed class SprintPlanningTools
             || string.Equals(todo.Priority, "Medium", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void RecordStep(string toolName, string summary) =>
-        Steps.Add(new AgentStepDto { ToolName = toolName, Summary = summary });
+    private void RecordStep(string role, string toolName, string summary)
+    {
+        var agentName = UseMultiAgentLabels
+            ? role
+            : "SprintAgent";
+
+        Steps.Add(new AgentStepDto
+        {
+            AgentName = agentName,
+            ToolName = toolName,
+            Summary = summary
+        });
+    }
 
     private static List<Guid> ParseIds(string raw)
     {
