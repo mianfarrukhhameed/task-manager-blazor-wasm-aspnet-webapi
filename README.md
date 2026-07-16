@@ -160,6 +160,10 @@ Disable AI summarization without removing the endpoint:
 
 When disabled, `POST /api/ai/summarize` returns **503 Service Unavailable**.
 
+### MCP server (Claude Desktop)
+
+A standalone MCP console app in `src/McpServer` exposes todos as MCP resources/tools over stdio and calls WebApi with a bearer token. See **[docs/mcp/README.md](docs/mcp/README.md)** for setup, Claude Desktop config, and environment variables (`API_URL`, `API_ACCESS_TOKEN`). `Ai:Features:EnableMcp` documents the feature conceptually; the MCP process is separate from WebApi.
+
 ### AI rate limiting
 
 `POST /api/ai/summarize` is rate-limited per authenticated user (`sub` claim), falling back to client IP when unauthenticated.
