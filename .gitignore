@@ -56,6 +56,7 @@ dlldata.c
 
 # Local user-specific settings
 launchSettings.json
+!src/AppHost/Properties/launchSettings.json
 appsettings.Development.json
 
 # Build folder (for publishing)

@@ -21,6 +21,8 @@ using System.Collections.Generic;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 var keyVaultUri = builder.Configuration["KeyVault:Uri"];
 
 if (builder.Environment.IsProduction() && !string.IsNullOrWhiteSpace(keyVaultUri))
@@ -60,6 +62,8 @@ builder.Services.AddClassificationSignalR();
 builder.Services.AddAiRateLimiting(builder.Configuration);
 
 var app = builder.Build();
+
+app.MapDefaultEndpoints();
 
 if (app.Environment.IsDevelopment())
 {

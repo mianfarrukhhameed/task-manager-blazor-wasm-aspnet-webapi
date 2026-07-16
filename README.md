@@ -75,7 +75,27 @@ var token = await _accessTokenProvider.GetAccessTokenAsync(cancellationToken);
 ```
 
 `RequireHttpsMetadata` is enabled outside Development so JWT metadata is fetched over HTTPS only.
-### Local development setup
+
+### .NET Aspire (recommended local orchestration)
+
+Aspire AppHost starts **PostgreSQL (pgvector)**, **WebApi**, and **WebApp** together and opens the Aspire dashboard (telemetry, resource status, logs).
+
+```bash
+dotnet run --project src/AppHost/AppHost.csproj
+```
+
+| Resource | Endpoint / notes |
+|---|---|
+| WebApi | `http://localhost:5000`, `https://localhost:5001` (matches `WebApp` API URL) |
+| WebApp | `https://localhost:5002` (matches CORS in WebApi) |
+| PostgreSQL | Aspire-managed `pgvector/pgvector:pg16` container; injects `ConnectionStrings__MainDb` |
+| pgAdmin | Host port **5050** (optional UI for the Aspire Postgres) |
+
+AI provider keys still come from WebApi user-secrets / environment (`Ai__GoogleAI__ApiKey`, etc.). Auth0 settings remain in appsettings.
+
+Do **not** run `docker compose up` Postgres on **5433** at the same time if you only want the Aspire database — use one or the other. Classic Compose + user-secrets remains supported below.
+
+### Local development setup (without Aspire)
 
 1. Start PostgreSQL (Postgres 16 via Docker Compose; host port **5433** to avoid clashing with a local Postgres on 5432):
 
@@ -97,7 +117,7 @@ export Ai__GoogleAI__ApiKey="your-google-ai-key"
 export Ai__Claude__ApiKey="your-anthropic-key"
 ```
 
-4. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored; use placeholders only in tracked files.
+4. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored (except Aspire AppHost); use placeholders only in tracked files.
 
 ### Local ONNX embeddings (BGE-small)
 

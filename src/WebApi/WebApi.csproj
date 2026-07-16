@@ -39,6 +39,7 @@
     <ProjectReference Include="..\ServiceLayer\ServiceLayer.csproj" />
     <ProjectReference Include="..\ViewModel\ViewModel.csproj" />
     <ProjectReference Include="..\AiLayer\AiLayer.csproj" />
+    <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>
