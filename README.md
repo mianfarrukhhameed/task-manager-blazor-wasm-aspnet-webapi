@@ -1,218 +1,101 @@
-# 📝 Task Manager (Full-Stack Reactive Architecture)
+# Task Manager — .NET AI Demo
 
-A robust Task Management system showcasing a **Clean Architecture** approach. This project integrates a **Reactive Blazor WebAssembly** frontend with a **CQRS-driven ASP.NET Core Web API**.
+A full-stack **task manager** used to demonstrate practical **AI engineering with .NET**: LLM integrations, embeddings/RAG, agents, and MCP — on top of a clean Blazor + ASP.NET Core architecture.
 
-## 🏗️ Architecture Overview
+> Demo / portfolio project, not a production SaaS product.
 
-This project is built on the principle of **Separation of Concerns**, ensuring each layer is independent and testable.
+## What this showcases
 
-### 1. Frontend: Reactive Blazor WASM
-* **State Management:** Powered by **Rx.NET (Reactive Extensions)**. It uses a `BehaviorSubject` as a Single Source of Truth, allowing the UI to react instantly to data changes.
-* **Decoupled Components:** Components are "dumb" and reusable. They handle local validation via **FluentValidation** and communicate via `EventCallback`.
-* **Observer Pattern:** Pages subscribe to data streams and automatically re-render via `IObservable` updates, minimizing manual UI refreshes.
+| Area | Implementation |
+|------|----------------|
+| Summarization | Short AI summaries of task descriptions |
+| Classification | Priority suggestions (guardrails + confidence) |
+| Embeddings | Local **ONNX** `bge-small-en-v1.5` (384-d) → **pgvector** |
+| Semantic search | Similarity search over todo embeddings |
+| RAG | Natural-language Q&A over the user’s tasks |
+| Function calling | Tool-style AI actions against the API |
+| Agents | **Microsoft Agent Framework** Analyst → Planner sprint workflow |
+| MCP | Standalone MCP server for Claude Desktop |
+| Multi-provider LLMs | Google Gemini, OpenAI, Azure OpenAI, Claude, Ollama |
 
-### 2. Backend: CQRS & MediatR
-* **Command/Query Segregation:** Uses the **CQRS pattern** to separate read and write operations, handled seamlessly by **MediatR**.
-* **Thin Controllers:** API controllers contain zero business logic; they simply delegate requests to MediatR handlers.
-* **Mapping:** **AutoMapper** is used to transform incoming Commands into Domain Entities and outgoing Entities into DTOs.
+UI: MudBlazor Blazor WASM (todos, sprints, AI Chat). Orchestration: **.NET Aspire** (Postgres + WebApi + WebApp).
 
-### 3. Data Layer: Repository Pattern
-* **Abstraction:** The `TodoTaskRepository` abstracts **Entity Framework Core**, providing a clean interface for data persistence.
-* **Concurrency:** Supports `CancellationToken` throughout the pipeline for optimized resource management.
+## Architecture
 
----
-
-## 🔄 The Full-Stack Data Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Blazor as Blazor Component
-    participant State as TodoStateService
-    participant API as TodosController
-    participant MediatR as CommandHandler
-    participant DB as PostgreSQL (EF Core)
-
-    User->>Blazor: Click "Submit"
-    Blazor->>Blazor: Local Validation (Fluent)
-    Blazor->>State: CreateTodo(command)
-    State->>API: HTTP POST /api/todos
-    API->>MediatR: _mediator.Send(command)
-    MediatR->>MediatR: AutoMapper (Cmd -> Entity)
-    MediatR->>DB: Repository.Create(entity)
-    DB-->>MediatR: Save Changes
-    MediatR-->>API: Return TodoTaskDto
-    API-->>State: 201 Created
-    State->>State: Update BehaviorSubject
-    State-->>Blazor: Observable Push
-    Note over Blazor: UI Updates Automatically
-
----
-
-## Configuration
-
-Secrets and environment-specific values are **not** committed to source control. Set them via environment variables, `dotnet user-secrets` (local development), Azure App Configuration, or Azure Key Vault (production).
-
-### Web API environment variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `ConnectionStrings__MainDb` | Yes | PostgreSQL connection string for the main database |
-| `Ai__GoogleAI__ApiKey` | When `Ai:Provider` is `google` | Google AI (Gemini) API key |
-| `Ai__Claude__ApiKey` | When `Ai:Provider` is `claude` | Anthropic API key |
-| `Ai__OpenAI__ApiKey` | When `Ai:Provider` is `openai` | OpenAI API key |
-| `AppConfigConnectionString` | Optional | Azure App Configuration connection string |
-| `AppConfigEnvironmentName` | Optional | Azure App Configuration label filter (e.g. `dev`, `prod`) |
-| `KeyVault__Uri` | Production | Azure Key Vault URI; loaded when `ASPNETCORE_ENVIRONMENT` is `Production` |
-| `AllowedHosts` | Production | Semicolon-separated hostnames allowed by the API (see `appsettings.Production.json`) |
-
-### Server-side access token
-
-The API stores the incoming bearer token via JWT `SaveToken` (not as a user claim). Inject `IAccessTokenProvider` when a handler or service needs the current user's access token (e.g. future Auth0 Management API calls):
-
-```csharp
-var token = await _accessTokenProvider.GetAccessTokenAsync(cancellationToken);
+```
+src/
+├── WebApp/           # Blazor WASM (MudBlazor, Auth0, Rx state)
+├── WebApi/           # ASP.NET Core API (JWT, Swagger, SignalR)
+├── AiLayer/          # Pipelines: summarize, classify, embed, RAG, SK tools
+├── ServiceLayer/     # CQRS handlers (MediatR), agents, queues
+├── DataLayer/        # EF Core + PostgreSQL / pgvector
+├── Core/             # Domain, abstractions
+├── ViewModel/        # Commands, DTOs, FluentValidation
+├── McpServer/        # MCP stdio server → WebApi
+├── AppHost/          # .NET Aspire orchestrator
+└── ServiceDefaults/  # Health, OTel, resilience
 ```
 
-`RequireHttpsMetadata` is enabled outside Development so JWT metadata is fetched over HTTPS only.
+```mermaid
+flowchart LR
+  UI[WebApp Blazor] -->|JWT| API[WebApi]
+  API --> SL[ServiceLayer CQRS]
+  SL --> AI[AiLayer]
+  SL --> DB[(PostgreSQL pgvector)]
+  AI --> LLM[Gemini / OpenAI / Claude / Ollama]
+  MCP[McpServer] -->|Bearer| API
+  Aspire[AppHost] --> API
+  Aspire --> UI
+  Aspire --> DB
+```
 
-### .NET Aspire (recommended local orchestration)
+**Stack highlights:** .NET 10, CQRS + MediatR, Auth0, EF Core, Semantic Kernel / Microsoft Agent Framework, Aspire.
 
-Aspire AppHost starts **PostgreSQL (pgvector)**, **WebApi**, and **WebApp** together and opens the Aspire dashboard (telemetry, resource status, logs).
+## Quick start
+
+**Prerequisites:** .NET 10 SDK, Docker (for Postgres via Aspire), Auth0 app configured, an LLM API key.
 
 ```bash
+# 1) AI key (WebApi user secrets)
+cd src/WebApi
+dotnet user-secrets set "Ai:GoogleAI:ApiKey" "your-key"
+
+# 2) Local embedding model (once)
+./scripts/download-bge-onnx.sh
+
+# 3) Run everything
 dotnet run --project src/AppHost/AppHost.csproj
 ```
 
-| Resource | Endpoint / notes |
-|---|---|
-| WebApi | `http://localhost:5000`, `https://localhost:5001` (matches `WebApp` API URL) |
-| WebApp | `https://localhost:5002` (matches CORS in WebApi) |
-| PostgreSQL | Aspire-managed `pgvector/pgvector:pg16` container; injects `ConnectionStrings__MainDb` |
-| pgAdmin | Host port **5050** (optional UI for the Aspire Postgres) |
+| App | URL |
+|-----|-----|
+| WebApp | https://localhost:5002 |
+| WebApi / Swagger | https://localhost:5001/swagger (or http://localhost:5000) |
+| Aspire dashboard | opened by AppHost |
+| pgAdmin (optional) | http://localhost:5050 |
 
-AI provider keys still come from WebApi user-secrets / environment (`Ai__GoogleAI__ApiKey`, etc.). Auth0 settings remain in appsettings.
+Without Aspire: `docker compose up -d` (Postgres on **5433**), set `ConnectionStrings:MainDb` in WebApi user secrets, then run WebApi + WebApp separately.
 
-Do **not** run `docker compose up` Postgres on **5433** at the same time if you only want the Aspire database — use one or the other. Classic Compose + user-secrets remains supported below.
+## AI features (in the UI)
 
-### Local development setup (without Aspire)
+- **Todos** — create/edit tasks; AI summary + priority classification; semantic search toggle  
+- **AI Chat** — Ask (RAG), Tools (function calling), Optimize Sprint (multi-agent)  
+- **Sprints** — list/detail of agent-created sprint plans  
 
-1. Start PostgreSQL (Postgres 16 via Docker Compose; host port **5433** to avoid clashing with a local Postgres on 5432):
+Feature flags live under `Ai:Features` in [`src/WebApi/appsettings.json`](src/WebApi/appsettings.json) (`EnableSummarization`, `EnableEmbeddings`, `EnableRag`, `EnableAgents`, …).
 
-```bash
-docker compose up -d
-```
+## MCP (Claude Desktop)
 
-2. Copy required values into `src/WebApi/Properties/launchSettings.json` under `environmentVariables`, **or** use user secrets:
+Standalone process in `src/McpServer` (stdio). Tools: `create_todo`, `update_todo`, `search_todos`, `analyze_workload`.  
+Setup: [`docs/mcp/README.md`](docs/mcp/README.md).
 
-```bash
-cd src/WebApi
-dotnet user-secrets set "ConnectionStrings:MainDb" "Host=localhost;Port=5433;Database=taskdb;Username=taskuser;Password=taskpass"
-```
+## Configuration notes
 
-3. Export AI keys in your shell or IDE run configuration (`launchSettings.json` environment variables):
+- Secrets via **user-secrets** / env vars — never commit keys.  
+- Aspire injects `ConnectionStrings__MainDb`; don’t run Compose Postgres and Aspire Postgres together unless intentional.  
+- Prefer `Ai:Agents:ChatModel` = `gemini-2.5-flash` (or OpenAI) for tool-calling agents.  
+- More Aspire detail: [`docs/aspire/README.md`](docs/aspire/README.md).
 
-```bash
-export Ai__GoogleAI__ApiKey="your-google-ai-key"
-export Ai__Claude__ApiKey="your-anthropic-key"
-```
+## License
 
-4. Never commit API keys, database passwords, or other secrets to git. `launchSettings.json` is gitignored (except Aspire AppHost); use placeholders only in tracked files.
-
-### Local ONNX embeddings (BGE-small)
-
-Todo embeddings default to an in-process **ONNX Runtime** model (`bge-small-en-v1.5`, 384-d) when `Ai:Embedding:Provider` is `Onnx`. Model weights are not committed; download them once:
-
-```bash
-chmod +x scripts/download-bge-onnx.sh
-./scripts/download-bge-onnx.sh
-```
-
-Then set `Ai:Features:EnableEmbeddings` to `true`. Alternate providers remain available via `Ai:Embedding:Provider` (`OpenAI` or `Ollama`). If you switch embedding providers or models, clear or recreate stored rows in `TodoEmbeddings` so vectors stay comparable.
-
-### Sprint planning agent (Microsoft Agent Framework)
-
-With `Ai:Features:EnableAgents` set to `true`, **AI Chat → Optimize Sprint** runs a Microsoft Agent Framework **Analyst → Planner** sequential workflow (`Ai:Agents:WorkflowMode` = `Multi`, default): Analyst uses search/stats/due-soon tools; Planner proposes and creates the sprint. Set `WorkflowMode` to `Single` for the previous one-agent loop. Steps in the UI show `AgentName/tool`. Prefer `Ai:Agents:ChatModel` = `gemini-2.5-flash` (or OpenAI) — Gemini 3.x often returns HTTP 400 on OpenAI-compat tool follow-ups. Heuristic selection still runs if the agent fails.
-
-### Logging
-
-LLM prompts and task content are logged at **Debug** level only. At **Information** level, the AI pipeline logs metadata (provider, model, content lengths) without user data. Enable Debug logging locally when troubleshooting summarization:
-
-```json
-"Logging": {
-  "LogLevel": {
-    "Fistix.TaskManager.AiLayer": "Debug"
-  }
-}
-```
-
-### Database migrations
-
-Schema changes are managed with EF Core migrations in `src/DataLayer/Migrations/`.
-
-Apply pending migrations locally:
-
-```bash
-cd src
-dotnet ef database update --project DataLayer/DataLayer.csproj --startup-project WebApi/WebApi.csproj
-```
-
-In Development, migrations are applied automatically on API startup.
-
-Add a new migration after model changes:
-
-```bash
-cd src
-dotnet ef migrations add <MigrationName> --project DataLayer/DataLayer.csproj --startup-project WebApi/WebApi.csproj
-```
-
-### AI feature flags
-
-Disable AI summarization without removing the endpoint:
-
-```json
-"Ai": {
-  "Features": {
-    "EnableSummarization": false
-  }
-}
-```
-
-When disabled, `POST /api/ai/summarize` returns **503 Service Unavailable**.
-
-### MCP server (Claude Desktop)
-
-A standalone MCP console app in `src/McpServer` exposes todos as MCP resources/tools over stdio and calls WebApi with a bearer token. See **[docs/mcp/README.md](docs/mcp/README.md)** for setup, Claude Desktop config, and environment variables (`API_URL`, `API_ACCESS_TOKEN`). `Ai:Features:EnableMcp` documents the feature conceptually; the MCP process is separate from WebApi.
-
-### AI rate limiting
-
-`POST /api/ai/summarize` is rate-limited per authenticated user (`sub` claim), falling back to client IP when unauthenticated.
-
-```json
-"Ai": {
-  "Features": {
-    "SummarizeRateLimit": {
-      "Enabled": true,
-      "PermitLimit": 10,
-      "WindowMinutes": 1
-    }
-  }
-}
-```
-
-When the limit is exceeded, the API returns **429 Too Many Requests** with a `Retry-After` header.
-
-### Input validation limits
-
-| Field | Max length |
-|---|---|
-| Title | 200 |
-| Description | 4,000 |
-| AI summary (output) | 500 (truncated with warning if exceeded) |
-
-### Production hardening (Phase 6)
-
-- **Swagger UI** is enabled only in Development.
-- **Security headers** are applied on every API response (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, baseline `Content-Security-Policy`).
-- **HSTS** is enabled outside Development.
-- **`AllowedHosts`**: Development allows `*`; Production defaults to `localhost;api.taskmanager.com` — override via `appsettings.Production.json` or environment for your deployment hostname.
+Demo / learning project. Use and adapt as needed for interviews, workshops, and portfolio demos.
