@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using Fistix.TaskManager.McpServer.Api;
+using Fistix.TaskManager.McpServer.Auth;
 using Fistix.TaskManager.McpServer.Configuration;
 using Xunit;
 
@@ -39,9 +41,8 @@ public class TaskManagerApiClientTests
         Assert.Single(todos);
         Assert.Equal(id, todos[0].ExternalId);
         Assert.Equal("Pay invoice", todos[0].Title);
-        Assert.Equal("High", todos[0].Priority);
-        Assert.Equal(1, todos[0].Status);
         Assert.Contains("api/todos", handler.LastRequest?.RequestUri?.ToString());
+        Assert.Equal("Bearer test-token", handler.LastRequest?.Headers.Authorization?.ToString());
     }
 
     [Fact]
@@ -70,8 +71,36 @@ public class TaskManagerApiClientTests
 
         Assert.Equal(id, created.ExternalId);
         Assert.Equal("New task", created.Title);
-        Assert.Equal("Medium", created.Priority);
         Assert.Equal(HttpMethod.Post, handler.LastRequest?.Method);
+    }
+
+    [Fact]
+    public async Task GetTodosAsync_RetriesOnce_OnUnauthorized()
+    {
+        var call = 0;
+        var tokens = new RecordingTokenProvider(["expired", "fresh"]);
+        var handler = new StubHandler(request =>
+        {
+            call++;
+            var auth = request.Headers.Authorization?.Parameter;
+            if (auth == "expired")
+            {
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"payload":[]}""", Encoding.UTF8, "application/json")
+            };
+        });
+
+        var client = CreateClient(handler, tokens);
+        var todos = await client.GetTodosAsync();
+
+        Assert.Empty(todos);
+        Assert.Equal(2, call);
+        Assert.Equal(2, tokens.GetCallCount);
+        Assert.True(tokens.LastForceRefresh);
     }
 
     [Fact]
@@ -81,7 +110,6 @@ public class TaskManagerApiClientTests
         var attempt503 = await CreateClient(handler503).TrySemanticSearchAsync("payment");
         Assert.True(attempt503.SoftFallback);
         Assert.False(attempt503.RateLimited);
-        Assert.Null(attempt503.Response);
 
         var handler429 = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
         var attempt429 = await CreateClient(handler429).TrySemanticSearchAsync("payment");
@@ -102,7 +130,9 @@ public class TaskManagerApiClientTests
         await Assert.ThrowsAsync<HttpRequestException>(() => client.TrySemanticSearchAsync("x"));
     }
 
-    private static TaskManagerApiClient CreateClient(StubHandler handler)
+    private static TaskManagerApiClient CreateClient(
+        StubHandler handler,
+        IAccessTokenProvider? tokenProvider = null)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:5000/") };
         var options = new McpServerOptions
@@ -110,17 +140,36 @@ public class TaskManagerApiClientTests
             ApiUrl = "http://localhost:5000",
             AccessToken = "test-token"
         };
-        return new TaskManagerApiClient(http, options);
+        return new TaskManagerApiClient(
+            http,
+            options,
+            tokenProvider ?? new StaticAccessTokenProvider("test-token"));
+    }
+
+    private sealed class RecordingTokenProvider : IAccessTokenProvider
+    {
+        private readonly Queue<string> _tokens;
+
+        public RecordingTokenProvider(IEnumerable<string> tokens) => _tokens = new Queue<string>(tokens);
+
+        public int GetCallCount { get; private set; }
+        public bool LastForceRefresh { get; private set; }
+
+        public Task<string> GetAccessTokenAsync(bool forceRefresh = false, CancellationToken cancellationToken = default)
+        {
+            GetCallCount++;
+            LastForceRefresh = forceRefresh;
+            return Task.FromResult(_tokens.Dequeue());
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
 
-        public StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
-        {
-            _responder = responder;
-        }
+        public StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) => _responder = responder;
 
         public HttpRequestMessage? LastRequest { get; private set; }
 

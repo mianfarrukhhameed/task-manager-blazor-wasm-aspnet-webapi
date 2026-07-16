@@ -86,7 +86,7 @@ Feature flags live under `Ai:Features` in [`src/WebApi/appsettings.json`](src/We
 
 ## MCP (Claude Desktop)
 
-Standalone process in `src/McpServer` (stdio). Tools: `create_todo`, `update_todo`, `search_todos`, `analyze_workload`.  
+Standalone process in `src/McpServer` (stdio). Auth: Auth0 **Device Code** + refresh token (no pasted JWT). Tools: `create_todo`, `update_todo`, `search_todos`, `analyze_workload`.  
 Setup: [`docs/mcp/README.md`](docs/mcp/README.md).
 
 ## Configuration notes
