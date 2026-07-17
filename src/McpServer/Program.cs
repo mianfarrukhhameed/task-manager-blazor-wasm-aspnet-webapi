@@ -1,4 +1,5 @@
 ﻿using Fistix.TaskManager.McpServer.Api;
+using Fistix.TaskManager.McpServer.Auth;
 using Fistix.TaskManager.McpServer.Configuration;
 using Fistix.TaskManager.McpServer.Resources;
 using Fistix.TaskManager.McpServer.Tools;
@@ -18,6 +19,29 @@ builder.Logging.AddConsole(console =>
 });
 
 builder.Services.AddSingleton(options);
+builder.Services.AddSingleton<TokenCacheStore>();
+builder.Services.AddHttpClient("auth0", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+if (options.UseStaticAccessToken)
+{
+    builder.Services.AddSingleton<IAccessTokenProvider>(
+        new StaticAccessTokenProvider(options.AccessToken));
+}
+else
+{
+    builder.Services.AddSingleton<IAccessTokenProvider>(sp =>
+    {
+        var opts = sp.GetRequiredService<McpServerOptions>();
+        var cache = sp.GetRequiredService<TokenCacheStore>();
+        var logger = sp.GetRequiredService<ILogger<Auth0DeviceCodeTokenService>>();
+        var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("auth0");
+        return new Auth0DeviceCodeTokenService(opts, cache, http, logger);
+    });
+}
+
 builder.Services.AddHttpClient<TaskManagerApiClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);

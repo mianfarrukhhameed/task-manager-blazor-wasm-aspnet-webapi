@@ -1,4 +1,5 @@
 using Fistix.TaskManager.McpServer.Api;
+using Fistix.TaskManager.McpServer.Auth;
 using Fistix.TaskManager.McpServer.Configuration;
 using Fistix.TaskManager.McpServer.Services;
 using Xunit;
@@ -75,25 +76,39 @@ public class WorkloadAnalyzerTests
 public class McpServerOptionsTests
 {
     [Fact]
-    public void Validate_RequiresAccessToken()
+    public void Validate_RequiresAuth0_WhenNoStaticToken()
     {
         var options = new McpServerOptions
         {
-            ApiUrl = "https://localhost:5001",
-            AccessToken = ""
+            ApiUrl = "http://localhost:5000",
+            AccessToken = "",
+            Auth0Domain = "",
+            Auth0ClientId = ""
         };
 
         var ex = Assert.Throws<InvalidOperationException>(() => options.Validate());
-        Assert.Contains("API_ACCESS_TOKEN", ex.Message);
+        Assert.Contains("AUTH0_DOMAIN", ex.Message);
+    }
+
+    [Fact]
+    public void Validate_AllowsStaticAccessTokenOverride()
+    {
+        var options = new McpServerOptions
+        {
+            ApiUrl = "http://localhost:5000",
+            AccessToken = "test-token"
+        };
+
+        options.Validate();
     }
 
     [Fact]
     public void FromEnvironment_DefaultsApiUrl()
     {
-        var previousUrl = Environment.GetEnvironmentVariable("API_URL");
-        var previousToken = Environment.GetEnvironmentVariable("API_ACCESS_TOKEN");
+        var previous = CaptureEnv();
         try
         {
+            ClearAuthEnv();
             Environment.SetEnvironmentVariable("API_URL", null);
             Environment.SetEnvironmentVariable("API_ACCESS_TOKEN", "test-token");
 
@@ -101,11 +116,79 @@ public class McpServerOptionsTests
 
             Assert.Equal(McpServerOptions.DefaultApiUrl, options.ApiUrl);
             Assert.Equal("test-token", options.AccessToken);
+            Assert.True(options.UseStaticAccessToken);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("API_URL", previousUrl);
-            Environment.SetEnvironmentVariable("API_ACCESS_TOKEN", previousToken);
+            RestoreEnv(previous);
+        }
+    }
+
+    [Fact]
+    public void Auth0Authority_NormalizesDomain()
+    {
+        var options = new McpServerOptions { Auth0Domain = "dev-example.us.auth0.com" };
+        Assert.Equal("https://dev-example.us.auth0.com/", options.Auth0Authority);
+    }
+
+    private static Dictionary<string, string?> CaptureEnv() => new()
+    {
+        ["API_URL"] = Environment.GetEnvironmentVariable("API_URL"),
+        ["API_ACCESS_TOKEN"] = Environment.GetEnvironmentVariable("API_ACCESS_TOKEN"),
+        ["AUTH0_DOMAIN"] = Environment.GetEnvironmentVariable("AUTH0_DOMAIN"),
+        ["AUTH0_AUTHORITY"] = Environment.GetEnvironmentVariable("AUTH0_AUTHORITY"),
+        ["AUTH0_CLIENT_ID"] = Environment.GetEnvironmentVariable("AUTH0_CLIENT_ID"),
+        ["AUTH0_AUDIENCE"] = Environment.GetEnvironmentVariable("AUTH0_AUDIENCE"),
+        ["AUTH0_SCOPE"] = Environment.GetEnvironmentVariable("AUTH0_SCOPE")
+    };
+
+    private static void ClearAuthEnv()
+    {
+        foreach (var key in CaptureEnv().Keys)
+        {
+            Environment.SetEnvironmentVariable(key, null);
+        }
+    }
+
+    private static void RestoreEnv(Dictionary<string, string?> previous)
+    {
+        foreach (var (key, value) in previous)
+        {
+            Environment.SetEnvironmentVariable(key, value);
+        }
+    }
+}
+
+public class TokenCacheStoreTests
+{
+    [Fact]
+    public void SaveLoadClear_RoundTrips()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"taskmanager-mcp-test-{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new TokenCacheStore(path);
+            store.Save(new TokenCacheEntry
+            {
+                AccessToken = "a",
+                RefreshToken = "r",
+                ExpiresAtUtc = DateTimeOffset.Parse("2026-07-17T12:00:00Z")
+            });
+
+            var loaded = store.Load();
+            Assert.NotNull(loaded);
+            Assert.Equal("a", loaded!.AccessToken);
+            Assert.Equal("r", loaded.RefreshToken);
+
+            store.Clear();
+            Assert.Null(store.Load());
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
     }
 }

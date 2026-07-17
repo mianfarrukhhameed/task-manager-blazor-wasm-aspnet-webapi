@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using Fistix.TaskManager.McpServer.Auth;
 using Fistix.TaskManager.McpServer.Configuration;
 
 namespace Fistix.TaskManager.McpServer.Api;
@@ -14,20 +16,23 @@ public sealed class TaskManagerApiClient
     };
 
     private readonly HttpClient _httpClient;
+    private readonly IAccessTokenProvider _tokenProvider;
 
-    public TaskManagerApiClient(HttpClient httpClient, McpServerOptions options)
+    public TaskManagerApiClient(
+        HttpClient httpClient,
+        McpServerOptions options,
+        IAccessTokenProvider tokenProvider)
     {
         _httpClient = httpClient;
+        _tokenProvider = tokenProvider;
         _httpClient.BaseAddress = new Uri(options.ApiUrl.TrimEnd('/') + "/");
-        _httpClient.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", options.AccessToken);
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
     public async Task<IReadOnlyList<TodoItem>> GetTodosAsync(CancellationToken cancellationToken = default)
     {
-        using var response = await _httpClient.GetAsync("api/todos", cancellationToken);
+        using var response = await SendAsync(HttpMethod.Get, "api/todos", content: null, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
         var body = await response.Content.ReadFromJsonAsync<TodoListResponse>(JsonOptions, cancellationToken);
@@ -55,7 +60,7 @@ public sealed class TaskManagerApiClient
             DueDate = dueDate
         };
 
-        using var response = await _httpClient.PostAsJsonAsync("api/todos", request, JsonOptions, cancellationToken);
+        using var response = await SendJsonAsync(HttpMethod.Post, "api/todos", request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
         var created = await response.Content.ReadFromJsonAsync<TodoItem>(JsonOptions, cancellationToken);
@@ -79,10 +84,10 @@ public sealed class TaskManagerApiClient
             Priority = priority
         };
 
-        using var response = await _httpClient.PutAsJsonAsync(
+        using var response = await SendJsonAsync(
+            HttpMethod.Put,
             $"api/todos/{externalId}",
             request,
-            JsonOptions,
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
@@ -97,14 +102,12 @@ public sealed class TaskManagerApiClient
     {
         var request = new SemanticSearchRequest { Query = query, Limit = limit };
 
-        using var response = await _httpClient.PostAsJsonAsync(
+        using var response = await SendJsonAsync(
+            HttpMethod.Post,
             "api/ai/todos/search/semantic",
             request,
-            JsonOptions,
             cancellationToken);
 
-        // Only soft-fallback when the feature is unavailable or rate-limited.
-        // Validation/auth errors (400/401/403) propagate as tool errors.
         if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
         {
             return new SemanticSearchAttempt { SoftFallback = true };
@@ -118,6 +121,58 @@ public sealed class TaskManagerApiClient
         await EnsureSuccessAsync(response, cancellationToken);
         var payload = await response.Content.ReadFromJsonAsync<SemanticSearchResponse>(JsonOptions, cancellationToken);
         return new SemanticSearchAttempt { Response = payload };
+    }
+
+    private Task<HttpResponseMessage> SendJsonAsync<T>(
+        HttpMethod method,
+        string path,
+        T body,
+        CancellationToken cancellationToken) =>
+        SendAsync(
+            method,
+            path,
+            () => new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method,
+        string path,
+        HttpContent? content,
+        CancellationToken cancellationToken) =>
+        await SendAsync(method, path, content is null ? null : () => content, cancellationToken);
+
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method,
+        string path,
+        Func<HttpContent>? contentFactory,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendOnceAsync(method, path, contentFactory, forceRefresh: false, cancellationToken);
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return response;
+        }
+
+        response.Dispose();
+        return await SendOnceAsync(method, path, contentFactory, forceRefresh: true, cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> SendOnceAsync(
+        HttpMethod method,
+        string path,
+        Func<HttpContent>? contentFactory,
+        bool forceRefresh,
+        CancellationToken cancellationToken)
+    {
+        var token = await _tokenProvider.GetAccessTokenAsync(forceRefresh, cancellationToken);
+        using var request = new HttpRequestMessage(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (contentFactory is not null)
+        {
+            request.Content = contentFactory();
+        }
+
+        return await _httpClient.SendAsync(request, cancellationToken);
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
